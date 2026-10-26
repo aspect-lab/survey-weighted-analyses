@@ -1,0 +1,99 @@
+# Preface {.unnumbered}
+
+```{r}
+#| label: setup
+#| include: false
+source("_common.R")
+```
+
+```{r}
+#| label: smoke-banner
+#| results: asis
+#| echo: false
+if (smoke_test) {
+  cat(
+    "::: {.callout-warning}\nSmoke test with",
+    n_imputations,
+    "imputations: not for reporting.\n:::\n"
+  )
+}
+```
+
+This book walks through a complete analysis of complex survey data in R, from downloading
+the raw file to reporting a multivariable model:
+
+1. importing a large survey file (@sec-import);
+2. cleaning and recoding it with explicit checks (@sec-cleaning);
+3. describing the population with survey-weighted statistics (@sec-descriptives);
+4. multiple imputation of missing data that respects the survey design (@sec-imputation);
+5. bivariate (crude) models (@sec-bivariate);
+6. multivariable (adjusted) models, a sensitivity analysis, and reporting
+   (@sec-multivariable).
+
+It is written for students who know some R and the basics of regression, and who are new to
+survey weights or multiple imputation.
+
+## The question
+
+**Is household income associated with diabetes among US adults?** Diabetes is common, costly,
+and unequally distributed. Income shapes access to healthy food, safe places to be active,
+health care, and the time and resources to manage a chronic condition. We estimate how the
+prevalence of diabetes differs across income groups, before and after accounting for age,
+sex, and race and ethnicity. An exercise in @sec-multivariable repeats the analysis for fair
+or poor general health.
+
+## The data
+
+We use the 2024 [Behavioral Risk Factor Surveillance System](https://www.cdc.gov/brfss/)
+(BRFSS): telephone interviews with 457,670 adults, weighted to represent the US adult
+population. The data are public. You download them yourself (@sec-import) and they stay on
+your computer.
+
+## Setup
+
+1. Install [R](https://cran.r-project.org/) (version 4.6.1 was used to build this book),
+   [Quarto](https://quarto.org/docs/get-started/), and an editor such as
+   [RStudio](https://posit.co/download/rstudio-desktop/) or
+   [Positron](https://positron.posit.co/).
+2. Open the project: double-click `survey-weighted-analyses.Rproj` (RStudio) or open the
+   folder (Positron).
+3. Install the packages: in the R console, run `renv::restore()`. This installs the exact
+   package versions the book was built with into the project (see @sec-reproducibility).
+4. For interactive chunks, run `setwd("book")` in the R console first. Download
+   the data by opening `book/01-import.qmd` and running the `download` chunk once.
+
+Then render the book from the terminal with `quarto render book` (the result is
+`book/_book/index.html`), or run the chapters' code chunk by chunk, in order. Each chapter saves
+what the next one needs in `data/processed/`. Rendering time depends on available
+memory, processor cores and the number of imputations.
+
+The import, survey tables, imputations and model fits reuse cached calculations
+on subsequent renders (see @sec-descriptive-cache and @sec-reproducibility).
+For descriptive statistics alone, run Chapters 1–3 and stop there.
+
+For a quick test of the whole pipeline, `quarto render book --profile smoke` uses 2 imputations
+instead of `r n_imputations_book` and writes to separate folders (`book/_book-smoke/`,
+`data/processed-smoke/`), so it never replaces the real results.
+
+## Chapters
+
+| Chapter | What it does | Saves |
+|---|---|---|
+| @sec-import | Downloads BRFSS 2024; reads the 13 variables we need | `01-brfss.rds` |
+| @sec-cleaning | Declares and checks codebook values; recodes | `02-brfss-clean.rds`, `02-crosswalk.rds` |
+| @sec-descriptives | Survey design; Tables 1 and 2; prevalence; design effects; missing data | |
+| @sec-imputation | Multiple imputation (`r n_imputations` imputations) | `04-imputed.rds` |
+| @sec-bivariate | Crude prevalence ratios, pooled with Rubin's rules | `05-crude.rds` |
+| @sec-multivariable | Adjusted prevalence ratios; joint test; complete-case comparison; reporting | |
+| @sec-decisions | Every coding decision, with counts | |
+| @sec-reproducibility | Packages, seeds, smoke tests, session information | |
+
+## How the code is written
+
+- Every function is called with its package name, as in `dplyr::mutate()`, so you always
+  know where a function comes from (and packages cannot silently mask each other).
+- `|>` is R's pipe: `x |> f()` means `f(x)`.
+- Lines that start with `# Check:` stop the code with an error if an assumption about the
+  data fails. A silent check means the data are as expected.
+- `tidylog::` versions of `dplyr` verbs print what each step did (rows dropped, variables
+  created, share missing).
