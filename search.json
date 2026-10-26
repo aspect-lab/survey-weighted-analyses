@@ -1,0 +1,590 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "survey-weighted-analyses",
+    "section": "",
+    "text": "Preface\nThis book walks through a complete analysis of complex survey data in R, from downloading the raw file to reporting a multivariable model:\nIt is written for students who know some R and the basics of regression, and who are new to survey weights or multiple imputation.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#the-question",
+    "href": "index.html#the-question",
+    "title": "survey-weighted-analyses",
+    "section": "The question",
+    "text": "The question\nIs household income associated with diabetes among US adults? Diabetes is common, costly, and unequally distributed. Income shapes access to healthy food, safe places to be active, health care, and the time and resources to manage a chronic condition. We estimate how the prevalence of diabetes differs across income groups, before and after accounting for age, sex, and race and ethnicity. An exercise in 6  Multivariable Models repeats the analysis for fair or poor general health.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#the-data",
+    "href": "index.html#the-data",
+    "title": "survey-weighted-analyses",
+    "section": "The data",
+    "text": "The data\nWe use the 2024 Behavioral Risk Factor Surveillance System (BRFSS): telephone interviews with 457,670 adults, weighted to represent the US adult population. The data are public. You download them yourself (1  Importing the Data) and they stay on your computer.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#setup",
+    "href": "index.html#setup",
+    "title": "survey-weighted-analyses",
+    "section": "Setup",
+    "text": "Setup\n\nInstall R (version 4.6.1 was used to build this book), Quarto, and an editor such as RStudio or Positron.\nOpen the project: double-click survey-weighted-analyses.Rproj (RStudio) or open the folder (Positron).\nInstall the packages: in the R console, run renv::restore(). This installs the exact package versions the book was built with into the project (see Appendix B — Reproducibility).\nFor interactive chunks, run setwd(\"book\") in the R console first. Download the data by opening book/01-import.qmd and running the download chunk once.\n\nThen render the book from the terminal with quarto render book (the result is book/_book/index.html), or run the chapters’ code chunk by chunk, in order. Each chapter saves what the next one needs in data/processed/. Rendering time depends on available memory, processor cores and the number of imputations.\nThe import, survey tables, imputations and model fits reuse cached calculations on subsequent renders (see Calculate once, then reuse and Appendix B — Reproducibility). For descriptive statistics alone, run Chapters 1–3 and stop there.\nFor a quick test of the whole pipeline, quarto render book --profile smoke uses 2 imputations instead of 5 and writes to separate folders (book/_book-smoke/, data/processed-smoke/), so it never replaces the real results.",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#chapters",
+    "href": "index.html#chapters",
+    "title": "survey-weighted-analyses",
+    "section": "Chapters",
+    "text": "Chapters\n\n\n\n\n\n\n\n\nChapter\nWhat it does\nSaves\n\n\n\n\n1  Importing the Data\nDownloads BRFSS 2024; reads the 14 variables we need\n01-brfss.rds\n\n\n2  Cleaning and Recoding\nDeclares and checks codebook values; recodes\n02-brfss-clean.rds, 02-crosswalk.rds\n\n\n3  Descriptive Statistics\nSurvey design; Tables 1 and 2; prevalence; design effects; missing data\n\n\n\n4  Multiple Imputation\nMultiple imputation (5 imputations)\n04-imputed.rds\n\n\n5  Bivariate Models\nCrude prevalence ratios, pooled with Rubin’s rules\n05-crude.rds\n\n\n6  Multivariable Models\nAdjusted prevalence ratios; joint test; complete-case comparison; reporting\n\n\n\nAppendix A — Coding Decisions\nEvery coding decision, with counts\n\n\n\nAppendix B — Reproducibility\nPackages, seeds, smoke tests, session information",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "index.html#how-the-code-is-written",
+    "href": "index.html#how-the-code-is-written",
+    "title": "survey-weighted-analyses",
+    "section": "How the code is written",
+    "text": "How the code is written\n\nEvery function is called with its package name, as in dplyr::mutate(), so you always know where a function comes from (and packages cannot silently mask each other).\n|&gt; is R’s pipe: x |&gt; f() means f(x).\nLines that start with # Check: stop the code with an error if an assumption about the data fails. A silent check means the data are as expected.\ntidylog:: versions of dplyr verbs print what each step did (rows dropped, variables created, share missing).",
+    "crumbs": [
+      "Preface"
+    ]
+  },
+  {
+    "objectID": "01-import.html",
+    "href": "01-import.html",
+    "title": "1  Importing the Data",
+    "section": "",
+    "text": "1.1 The Behavioral Risk Factor Surveillance System\nThe Behavioral Risk Factor Surveillance System (BRFSS) is the largest continuously running health survey in the world. Every year, the Centers for Disease Control and Prevention (CDC) and the states interview hundreds of thousands of US adults by landline and cell phone about their health conditions, health behaviors, and use of health care. In 2024, 457,670 adults in 49 states, the District of Columbia, Guam, Puerto Rico, and the US Virgin Islands completed the interview (Tennessee did not collect enough data to be included).\nBRFSS is a complex survey:\nEvery estimate in this book uses all three. Chapter 3 shows what happens when they are ignored.",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Importing the Data</span>"
+    ]
+  },
+  {
+    "objectID": "01-import.html#the-behavioral-risk-factor-surveillance-system",
+    "href": "01-import.html#the-behavioral-risk-factor-surveillance-system",
+    "title": "1  Importing the Data",
+    "section": "",
+    "text": "Strata. Each state’s sample is drawn separately within strata (for example, by region and by landline or cell phone).\nPrimary sampling units (PSUs). Within a stratum, phone numbers are sampled. In BRFSS each respondent is their own PSU.\nWeights. People are sampled with different probabilities and respond at different rates. CDC’s final weight (_LLCPWT) corrects for both and makes the weighted sample match each state’s adult population by age, sex, race and ethnicity, education, and other characteristics (“raking”).",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Importing the Data</span>"
+    ]
+  },
+  {
+    "objectID": "01-import.html#download-the-data-run-once",
+    "href": "01-import.html#download-the-data-run-once",
+    "title": "1  Importing the Data",
+    "section": "1.2 Download the data (run once)",
+    "text": "1.2 Download the data (run once)\nCDC distributes the data as a zipped SAS transport file (.XPT), a format that stores a SAS dataset in a portable way. The zip file is 83 MB, and the unzipped file is 1.1 GB.\nRun the chunk below once, by hand (it is not run when the book is rendered). It saves data/raw/LLCP2024.XPT. Raw data, processed data and caches are excluded from Git.\n\n\nCode\ndir.create(\"../data/raw\", showWarnings = FALSE, recursive = TRUE)\nzip_file &lt;- \"../data/raw/LLCP2024XPT.zip\"\noptions(timeout = 600) # allow 10 minutes on a slow connection\nutils::download.file(\n  \"https://www.cdc.gov/brfss/annual_data/2024/files/LLCP2024XPT.zip\",\n  destfile = zip_file,\n  mode = \"wb\"\n)\n# The zip file names its contents \"LLCP2024.XPT \" (with a trailing space), so rename the file.\nextracted &lt;- utils::unzip(zip_file, exdir = \"../data/raw\")\nfile.rename(extracted, \"../data/raw/LLCP2024.XPT\")\nfile.remove(zip_file)\n\n\n\n\n\n\n\n\nTipDownloading by hand\n\n\n\nYou can also download the zip file from the CDC BRFSS 2024 page (“2024 BRFSS Data (SAS Transport Format)”), unzip it, and save the file as data/raw/LLCP2024.XPT. The same page has the codebook, which lists every variable, its question, and its codes.",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Importing the Data</span>"
+    ]
+  },
+  {
+    "objectID": "01-import.html#read-only-the-columns-we-need",
+    "href": "01-import.html#read-only-the-columns-we-need",
+    "title": "1  Importing the Data",
+    "section": "1.3 Read only the columns we need",
+    "text": "1.3 Read only the columns we need\nThe file has 345 columns. We need 14, so we read only those with col_select. This keeps memory use low and makes reading fast. It does not change the survey design: every one of the 457,670 respondents is kept, with their weight, stratum, and PSU.\n\n\n\nTable 1.1: The 14 variables used in this book\n\n\n\n\n\n\n\n\n\n\nRole\nVariables\nCodebook label\n\n\n\n\nSurvey design\n_LLCPWT, _STSTR, _PSU, _STATE\nFinal weight, stratum, primary sampling unit, state\n\n\nOutcomes\nDIABETE4, GENHLTH, MEDCOST1\nEver told you had diabetes; general health; could not afford a doctor\n\n\nExposure\nINCOME3\nAnnual household income\n\n\nCovariates\n_AGE_G, SEXVAR, _IMPRACE\nAge in six groups; sex; race and ethnicity\n\n\nContinuous-variable example\n_AGE80\nCDC-imputed age in years, capped at 80\n\n\nAuxiliary variables\nEDUCA, EMPLOY1\nEducation; employment (used only to help impute income in Chapter 4)\n\n\n\n\n\n\nNames that start with an underscore are variables CDC calculated. In R they must be wrapped in backticks, as in `_LLCPWT`.\n\n\nCode\nbrfss &lt;- haven::read_xpt(\n  raw_file,\n  col_select = c(\n    `_LLCPWT`,\n    `_STSTR`,\n    `_PSU`,\n    `_STATE`, # survey design\n    DIABETE4,\n    GENHLTH,\n    MEDCOST1, # outcomes\n    INCOME3, # exposure\n    `_AGE_G`,\n    SEXVAR,\n    `_IMPRACE`, # covariates\n    `_AGE80`, # continuous-variable descriptive example\n    EDUCA,\n    EMPLOY1 # auxiliary variables for imputation\n  )\n)\n\n# Check: all 457,670 respondents and the 14 columns we asked for.\nstopifnot(nrow(brfss) == 457670, ncol(brfss) == 14)\ndplyr::glimpse(brfss)\n\n\nRows: 457,670\nColumns: 14\n$ `_STATE`   &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,…\n$ `_PSU`     &lt;dbl&gt; 2.024e+09, 2.024e+09, 2.024e+09, 2.024e+09, 2.024e+09, 2.02…\n$ SEXVAR     &lt;dbl&gt; 2, 1, 1, 1, 1, 1, 2, 2, 2, 1, 2, 1, 1, 1, 2, 2, 1, 2, 2, 1,…\n$ GENHLTH    &lt;dbl&gt; 3, 1, 2, 1, 3, 3, 4, 5, 3, 4, 3, 3, 2, 2, 3, 2, 4, 2, 3, 2,…\n$ MEDCOST1   &lt;dbl&gt; 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,…\n$ DIABETE4   &lt;dbl&gt; 3, 3, 3, 3, 3, 1, 3, 1, 3, 1, 3, 3, 3, 4, 1, 3, 3, 3, 3, 1,…\n$ EDUCA      &lt;dbl&gt; 4, 6, 5, 6, 5, 4, 5, 5, 4, 5, 5, 5, 4, 6, 6, 6, 4, 6, 4, 6,…\n$ EMPLOY1    &lt;dbl&gt; 7, 7, 1, 7, 8, 1, 7, 7, 7, 7, 7, 7, 7, 8, 7, 7, 7, 1, 5, 1,…\n$ INCOME3    &lt;dbl&gt; 99, 11, 99, 6, 3, 9, 6, 99, 5, 7, 6, 8, 6, 7, 8, 6, 2, 7, 6…\n$ `_STSTR`   &lt;dbl&gt; 11011, 11011, 11011, 11011, 11011, 11011, 11011, 11011, 110…\n$ `_IMPRACE` &lt;dbl&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 6, 1, 2, 1, 2, 1, 1, 1,…\n$ `_LLCPWT`  &lt;dbl&gt; 261.5255, 307.1697, 2939.8628, 153.5848, 1229.6230, 451.219…\n$ `_AGE80`   &lt;dbl&gt; 78, 80, 59, 80, 47, 54, 71, 68, 70, 80, 72, 80, 71, 80, 80,…\n$ `_AGE_G`   &lt;dbl&gt; 6, 6, 5, 6, 4, 4, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5,…\n\n\nEvery column is numeric, but most answers are category codes, such as 1 for “Yes” and 7 for “Don’t know”. Chapter 2 turns those codes into labeled categories and keeps _AGE80 as numeric age for the continuous-variable example.",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Importing the Data</span>"
+    ]
+  },
+  {
+    "objectID": "01-import.html#save-for-the-next-chapter",
+    "href": "01-import.html#save-for-the-next-chapter",
+    "title": "1  Importing the Data",
+    "section": "1.4 Save for the next chapter",
+    "text": "1.4 Save for the next chapter\nQuarto runs each chapter of this book in a fresh R session, so each chapter saves what the next one needs. An .rds file stores one R object exactly as it is in memory.\n\n\nCode\nsaveRDS(brfss, file.path(processed_dir, \"01-brfss.rds\"))",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>1</span>  <span class='chapter-title'>Importing the Data</span>"
+    ]
+  },
+  {
+    "objectID": "02-cleaning.html",
+    "href": "02-cleaning.html",
+    "title": "2  Cleaning and Recoding",
+    "section": "",
+    "text": "2.1 Step 1: Declare what each item can be\nRaw BRFSS answers are numeric codes. Cleaning turns them into labeled categories that R and readers understand. It is also where most analysis errors start: a code that slips through unrecoded (a 99 for “refused” read as an income group) or a missing value silently turned into “no” changes every result that follows.\nThis chapter follows four rules:\nThe values below come from the BRFSS 2024 codebook. BRFSS uses the same codes for non-answers throughout: 7 (or 77) for “Don’t know/Not sure”, 9 (or 99) for “Refused”, and a blank (NA in R) for “Not asked or missing”.\nCode\n# Possible values of each item in the BRFSS 2024 codebook. Blank (NA) means \"not asked or\n# missing\".\nitem_values &lt;- list(\n  DIABETE4 = c(1:4, 7, 9), # 1 Yes; 2 Yes, but only during pregnancy; 3 No;\n  # 4 No, prediabetes or borderline; 7 Don't know; 9 Refused\n  GENHLTH = c(1:5, 7, 9), # 1 Excellent; 2 Very good; 3 Good; 4 Fair; 5 Poor;\n  # 7 Don't know; 9 Refused\n  MEDCOST1 = c(1, 2, 7, 9), # 1 Yes; 2 No; 7 Don't know; 9 Refused\n  INCOME3 = c(1:11, 77, 99), # 1 Less than $10,000 ... 11 $200,000 or more;\n  # 77 Don't know; 99 Refused\n  `_AGE_G` = 1:6, # 1 18-24; 2 25-34; 3 35-44; 4 45-54; 5 55-64; 6 65+\n  `_AGE80` = 18:80, # CDC-imputed age in years; 80 means 80 or older\n  SEXVAR = 1:2, # 1 Male; 2 Female\n  `_IMPRACE` = 1:6, # 1 White; 2 Black; 3 Asian; 4 American Indian or Alaska\n  # Native (all non-Hispanic); 5 Hispanic; 6 Other, non-Hispanic\n  EDUCA = c(1:6, 9), # 1 Never attended ... 6 College 4 years or more; 9 Refused\n  EMPLOY1 = 1:9, # 1 Employed for wages ... 8 Unable to work; 9 Refused\n  `_STATE` = c(1, 2, 4:6, 8:13, 15:42, 44:46, 48:51, 53:56, 66, 72, 78) # FIPS codes\n)\n# The design variables and the CDC-imputed items are never blank.\nnever_blank &lt;- c(\n  \"_LLCPWT\",\n  \"_STSTR\",\n  \"_PSU\",\n  \"_STATE\",\n  \"_AGE_G\",\n  \"_AGE80\",\n  \"SEXVAR\",\n  \"_IMPRACE\"\n)\nThe 53 state codes are the 2024 codebook’s: the 50 states except Tennessee (47), plus the District of Columbia (11), Guam (66), Puerto Rico (72), and the US Virgin Islands (78).",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Cleaning and Recoding</span>"
+    ]
+  },
+  {
+    "objectID": "02-cleaning.html#step-2-check-the-data-against-the-codebook",
+    "href": "02-cleaning.html#step-2-check-the-data-against-the-codebook",
+    "title": "2  Cleaning and Recoding",
+    "section": "2.2 Step 2: Check the data against the codebook",
+    "text": "2.2 Step 2: Check the data against the codebook\nA codebook can be wrong, and a file can change between releases. This check compares every observed value with the declaration and stops, naming each item and value, if anything else appears. It is silent when the data are as declared.\n\n\nCode\n# Check: every value is in the codebook.\nunexpected &lt;- purrr::imap(item_values, \\(values, item) {\n  setdiff(brfss[[item]], c(values, NA))\n}) |&gt;\n  purrr::compact()\nif (length(unexpected) &gt; 0) {\n  stop(\n    \"Values not in the codebook: \",\n    paste0(\n      names(unexpected),\n      \" (\",\n      purrr::map_chr(unexpected, toString),\n      \")\",\n      collapse = \"; \"\n    )\n  )\n}\n# Check: no blanks where the codebook has none, and every weight is positive.\nstopifnot(!anyNA(brfss[never_blank]), all(brfss[[\"_LLCPWT\"]] &gt; 0))\n\n\nHere is one item’s raw distribution, before recoding:\n\n\nCode\ntidylog::count(brfss, INCOME3)\n\n\ncount: now 14 rows and 2 columns, ungrouped\n\n\n# A tibble: 14 × 2\n   INCOME3     n\n     &lt;dbl&gt; &lt;int&gt;\n 1       1 10258\n 2       2 10542\n 3       3 13662\n 4       4 19841\n 5       5 41702\n 6       6 49686\n 7       7 60709\n 8       8 51700\n 9       9 55778\n10      10 26675\n11      11 29694\n12      77 37113\n13      99 41041\n14      NA  9269",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Cleaning and Recoding</span>"
+    ]
+  },
+  {
+    "objectID": "02-cleaning.html#step-3-recode",
+    "href": "02-cleaning.html#step-3-recode",
+    "title": "2  Cleaning and Recoding",
+    "section": "2.3 Step 3: Recode",
+    "text": "2.3 Step 3: Recode\ndplyr::recode_values() maps each code (left of ~) to a value (right of ~). With unmatched = \"error\", any code we did not list stops the run, so nothing can slip through. tidylog::mutate() works like dplyr::mutate() but reports what each new variable looks like, including its share of missing values.\nFour decisions are built into this recoding (Appendix A lists them with counts):\n\nNon-answers become missing. “Don’t know”, “refused”, and blank tell us nothing about a person’s true value, so they become NA. Chapter 4 fills them in by multiple imputation rather than dropping those people.\nValues that other answers settle are coded, not left missing. A woman told she had diabetes only during pregnancy (DIABETE4 = 2) does not have diabetes now, so she is coded “No”.\nAge and race and ethnicity come from CDC’s imputed versions. CDC fills the few missing answers for these weighting variables (_AGE_G, _IMPRACE), so they are never blank. Six age groups adjust for age much better than two.\nReference groups come first. The first level of each factor is the comparison group in the models: the lowest income group, ages 18-24, female, and non-Hispanic White (the largest group).\n\n\n\nCode\nbrfss_clean &lt;- brfss |&gt;\n  tidylog::mutate(\n    diabetes = dplyr::recode_values(\n      DIABETE4,\n      1 ~ \"Yes\",\n      c(2, 3) ~ \"No\", # 2 = told only during pregnancy: no diabetes now\n      4 ~ \"Prediabetes\",\n      c(7, 9, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(levels = c(\"No\", \"Prediabetes\", \"Yes\")),\n    genhlth = dplyr::recode_values(\n      GENHLTH,\n      1 ~ \"Excellent\",\n      2 ~ \"Very good\",\n      3 ~ \"Good\",\n      4 ~ \"Fair\",\n      5 ~ \"Poor\",\n      c(7, 9, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(levels = c(\"Excellent\", \"Very good\", \"Good\", \"Fair\", \"Poor\")),\n    cost_barrier = dplyr::recode_values(\n      MEDCOST1,\n      1 ~ \"Yes\",\n      2 ~ \"No\",\n      c(7, 9, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(levels = c(\"No\", \"Yes\")),\n    income = dplyr::recode_values(\n      INCOME3,\n      1:4 ~ \"Less than $25,000\",\n      5:6 ~ \"$25,000 to $49,999\",\n      7:8 ~ \"$50,000 to $99,999\",\n      9:11 ~ \"$100,000 or more\",\n      c(77, 99, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(\n        levels = c(\n          \"Less than $25,000\",\n          \"$25,000 to $49,999\",\n          \"$50,000 to $99,999\",\n          \"$100,000 or more\"\n        )\n      ),\n    age_group = dplyr::recode_values(\n      `_AGE_G`,\n      1 ~ \"18-24\",\n      2 ~ \"25-34\",\n      3 ~ \"35-44\",\n      4 ~ \"45-54\",\n      5 ~ \"55-64\",\n      6 ~ \"65 or older\",\n      unmatched = \"error\"\n    ) |&gt;\n      factor(\n        levels = c(\"18-24\", \"25-34\", \"35-44\", \"45-54\", \"55-64\", \"65 or older\")\n      ),\n    age = as.numeric(`_AGE80`),\n    sex = dplyr::recode_values(\n      SEXVAR,\n      1 ~ \"Male\",\n      2 ~ \"Female\",\n      unmatched = \"error\"\n    ) |&gt;\n      factor(levels = c(\"Female\", \"Male\")),\n    race_eth = dplyr::recode_values(\n      `_IMPRACE`,\n      1 ~ \"Non-Hispanic White\",\n      2 ~ \"Non-Hispanic Black\",\n      3 ~ \"Non-Hispanic Asian\",\n      4 ~ \"Non-Hispanic American Indian or Alaska Native\",\n      5 ~ \"Hispanic\",\n      6 ~ \"Non-Hispanic other race\",\n      unmatched = \"error\"\n    ) |&gt;\n      factor(\n        levels = c(\n          \"Non-Hispanic White\",\n          \"Non-Hispanic Black\",\n          \"Non-Hispanic Asian\",\n          \"Non-Hispanic American Indian or Alaska Native\",\n          \"Hispanic\",\n          \"Non-Hispanic other race\"\n        )\n      ),\n    education = dplyr::recode_values(\n      EDUCA,\n      1:3 ~ \"Less than high school\",\n      4 ~ \"High school graduate\",\n      5 ~ \"Some college\",\n      6 ~ \"College graduate\",\n      c(9, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(\n        levels = c(\n          \"Less than high school\",\n          \"High school graduate\",\n          \"Some college\",\n          \"College graduate\"\n        )\n      ),\n    employment = dplyr::recode_values(\n      EMPLOY1,\n      1:2 ~ \"Employed\",\n      3:4 ~ \"Out of work\",\n      5:6 ~ \"Homemaker or student\",\n      7 ~ \"Retired\",\n      8 ~ \"Unable to work\",\n      c(9, NA) ~ NA,\n      unmatched = \"error\"\n    ) |&gt;\n      factor(\n        levels = c(\n          \"Employed\",\n          \"Out of work\",\n          \"Homemaker or student\",\n          \"Retired\",\n          \"Unable to work\"\n        )\n      ),\n    state = factor(`_STATE`),\n    # 0/1 outcomes for the models. `==` keeps missing values missing (`%in%` would not).\n    diabetes_yes = as.integer(diabetes == \"Yes\"),\n    fair_poor = as.integer(genhlth == \"Fair\" | genhlth == \"Poor\")\n  ) |&gt;\n  # PSU codes repeat across strata: number each stratum-PSU pair.\n  tidylog::mutate(psu_id = dplyr::cur_group_id(), .by = c(`_STSTR`, `_PSU`))\n\n\nmutate: new variable 'diabetes' (factor) with 4 unique values and &lt;1% NA\n        new variable 'genhlth' (factor) with 6 unique values and &lt;1% NA\n        new variable 'cost_barrier' (factor) with 3 unique values and &lt;1% NA\n        new variable 'income' (factor) with 5 unique values and 19% NA\n        new variable 'age_group' (factor) with 6 unique values and 0% NA\n        new variable 'age' (double) with 63 unique values and 0% NA\n        new variable 'sex' (factor) with 2 unique values and 0% NA\n        new variable 'race_eth' (factor) with 6 unique values and 0% NA\n        new variable 'education' (factor) with 5 unique values and 1% NA\n        new variable 'employment' (factor) with 6 unique values and 2% NA\n        new variable 'state' (factor) with 53 unique values and 0% NA\n        new variable 'diabetes_yes' (integer) with 3 unique values and &lt;1% NA\n        new variable 'fair_poor' (integer) with 3 unique values and &lt;1% NA\nmutate: new variable 'psu_id' (integer) with 457,670 unique values and 0% NA\n\n\n\n\n\n\n\n\nWarningA common trap with missing values\n\n\n\ngenhlth %in% c(\"Fair\", \"Poor\") returns FALSE (not NA) when genhlth is missing, so everyone with a missing answer would be counted as being in good health. Comparisons with == keep missing values missing.\n\n\n\n\n\n\n\n\nNoteWhy a new PSU identifier?\n\n\n\nIn BRFSS, PSU codes are only unique within a stratum: PSU 1 in one stratum is a different phone number from PSU 1 in another. survey::svydesign() can combine them itself (nest = TRUE). Numbering each stratum-PSU pair once gives globally unique integer IDs and avoids repeated relabeling and a large nesting cross-tabulation. The speed difference depends on the installed survey backend; the weights, strata and clusters are unchanged. There are 457,670 pairs for 457,670 respondents: in BRFSS each respondent is their own PSU.",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Cleaning and Recoding</span>"
+    ]
+  },
+  {
+    "objectID": "02-cleaning.html#step-4-check-the-recoding",
+    "href": "02-cleaning.html#step-4-check-the-recoding",
+    "title": "2  Cleaning and Recoding",
+    "section": "2.4 Step 4: Check the recoding",
+    "text": "2.4 Step 4: Check the recoding\nThe unmatched = \"error\" arguments already guarantee that every code was mapped. Four more checks confirm the rules we rely on later, including that every PSU identifier sits in a single stratum, which lets the survey designs in later chapters skip their own (slow) check of the same thing.\n\n\nCode\n# Check: the \"only during pregnancy\" answers are now \"No\", and the 0/1 outcomes are\n# missing exactly where the outcomes are.\nstopifnot(\n  all(brfss_clean$diabetes[brfss_clean$DIABETE4 %in% 2] == \"No\"),\n  identical(is.na(brfss_clean$diabetes_yes), is.na(brfss_clean$diabetes)),\n  identical(is.na(brfss_clean$fair_poor), is.na(brfss_clean$genhlth))\n)\n# Check: each PSU identifier belongs to exactly one stratum (PSUs are nested in strata).\nstopifnot(\n  nrow(dplyr::distinct(brfss_clean, psu_id, `_STSTR`)) ==\n    dplyr::n_distinct(brfss_clean$psu_id)\n)\n\n\nA crosswalk lists every raw code next to the value it became, with the number of respondents. It is the record of the recoding, and Appendix A shows it in full. Here is income:\n\n\nCode\nrecoded &lt;- c(\n  DIABETE4 = \"diabetes\",\n  GENHLTH = \"genhlth\",\n  MEDCOST1 = \"cost_barrier\",\n  INCOME3 = \"income\",\n  `_AGE_G` = \"age_group\",\n  `_AGE80` = \"age\",\n  SEXVAR = \"sex\",\n  `_IMPRACE` = \"race_eth\",\n  EDUCA = \"education\",\n  EMPLOY1 = \"employment\"\n)\ncrosswalk &lt;- purrr::imap(recoded, \\(new, item) {\n  return(dplyr::count(\n    brfss_clean,\n    code = as.numeric(.data[[item]]),\n    value = as.character(.data[[new]])\n  ))\n}) |&gt;\n  purrr::list_rbind(names_to = \"item\")\ndplyr::filter(crosswalk, item == \"INCOME3\")\n\n\n# A tibble: 14 × 4\n   item     code value                  n\n   &lt;chr&gt;   &lt;dbl&gt; &lt;chr&gt;              &lt;int&gt;\n 1 INCOME3     1 Less than $25,000  10258\n 2 INCOME3     2 Less than $25,000  10542\n 3 INCOME3     3 Less than $25,000  13662\n 4 INCOME3     4 Less than $25,000  19841\n 5 INCOME3     5 $25,000 to $49,999 41702\n 6 INCOME3     6 $25,000 to $49,999 49686\n 7 INCOME3     7 $50,000 to $99,999 60709\n 8 INCOME3     8 $50,000 to $99,999 51700\n 9 INCOME3     9 $100,000 or more   55778\n10 INCOME3    10 $100,000 or more   26675\n11 INCOME3    11 $100,000 or more   29694\n12 INCOME3    77 &lt;NA&gt;               37113\n13 INCOME3    99 &lt;NA&gt;               41041\n14 INCOME3    NA &lt;NA&gt;                9269\n\n\nIncome is missing for 87,423 respondents (19.1%): more than any other variable in this book. Chapter 3 looks at who they are.",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Cleaning and Recoding</span>"
+    ]
+  },
+  {
+    "objectID": "02-cleaning.html#step-5-keep-the-analysis-variables-and-save",
+    "href": "02-cleaning.html#step-5-keep-the-analysis-variables-and-save",
+    "title": "2  Cleaning and Recoding",
+    "section": "2.5 Step 5: Keep the analysis variables and save",
+    "text": "2.5 Step 5: Keep the analysis variables and save\ntidylog::select() keeps the recoded variables, renames the design variables so they no longer need backticks, and drops the raw codes.\n\n\nCode\nbrfss_clean &lt;- brfss_clean |&gt;\n  tidylog::select(\n    weight = `_LLCPWT`,\n    strata = `_STSTR`,\n    psu_id,\n    state, # survey design\n    diabetes,\n    diabetes_yes,\n    genhlth,\n    fair_poor,\n    cost_barrier, # outcomes\n    income, # exposure\n    age_group,\n    age, # numeric age for the descriptive example; models use age_group\n    sex,\n    race_eth, # covariates\n    education,\n    employment # auxiliary variables\n  )\n\n\nselect: renamed 2 variables (weight, strata) and dropped 12 variables\n\n\nCode\ndplyr::glimpse(brfss_clean)\n\n\nRows: 457,670\nColumns: 16\n$ weight       &lt;dbl&gt; 261.5255, 307.1697, 2939.8628, 153.5848, 1229.6230, 451.2…\n$ strata       &lt;dbl&gt; 11011, 11011, 11011, 11011, 11011, 11011, 11011, 11011, 1…\n$ psu_id       &lt;int&gt; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17…\n$ state        &lt;fct&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, …\n$ diabetes     &lt;fct&gt; No, No, No, No, No, Yes, No, Yes, No, Yes, No, No, No, Pr…\n$ diabetes_yes &lt;int&gt; 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, …\n$ genhlth      &lt;fct&gt; Good, Excellent, Very good, Excellent, Good, Good, Fair, …\n$ fair_poor    &lt;int&gt; 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, …\n$ cost_barrier &lt;fct&gt; No, No, Yes, No, No, No, No, No, No, No, No, No, No, No, …\n$ income       &lt;fct&gt; NA, \"$100,000 or more\", NA, \"$25,000 to $49,999\", \"Less t…\n$ age_group    &lt;fct&gt; 65 or older, 65 or older, 55-64, 65 or older, 45-54, 45-5…\n$ age          &lt;dbl&gt; 78, 80, 59, 80, 47, 54, 71, 68, 70, 80, 72, 80, 71, 80, 8…\n$ sex          &lt;fct&gt; Female, Male, Male, Male, Male, Male, Female, Female, Fem…\n$ race_eth     &lt;fct&gt; Non-Hispanic White, Non-Hispanic White, Non-Hispanic Whit…\n$ education    &lt;fct&gt; High school graduate, College graduate, Some college, Col…\n$ employment   &lt;fct&gt; Retired, Retired, Employed, Retired, Unable to work, Empl…\n\n\nCode\nsaveRDS(brfss_clean, file.path(processed_dir, \"02-brfss-clean.rds\"))\nsaveRDS(crosswalk, file.path(processed_dir, \"02-crosswalk.rds\"))",
+    "crumbs": [
+      "Preparing the data",
+      "<span class='chapter-number'>2</span>  <span class='chapter-title'>Cleaning and Recoding</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html",
+    "href": "03-descriptives.html",
+    "title": "3  Descriptive Statistics",
+    "section": "",
+    "text": "3.1 The survey design object\nDescriptive statistics answer “what does the population look like?” With a complex survey, every estimate has to use the survey design, or it describes the sample (who happened to answer the phone) rather than the population (US adults). This chapter describes the observed data only: the answers people gave, with missing answers shown as missing. Imputed values (Chapter 4) are for models, not for describing who answered what.\nThe srvyr package lets us describe the design once and then use familiar dplyr verbs on it. The design object stores the data together with the three design features from Chapter 1:\nCode\n# Check again when reading a saved file: identifiers are nested and weights are valid.\nstopifnot(\n  !anyNA(brfss_clean[c(\"psu_id\", \"strata\", \"weight\")]),\n  all(is.finite(brfss_clean$weight)),\n  all(brfss_clean$weight &gt; 0),\n  nrow(dplyr::distinct(brfss_clean, psu_id, strata)) ==\n    dplyr::n_distinct(brfss_clean$psu_id)\n)\ndesign &lt;- brfss_clean |&gt;\n  srvyr::as_survey_design(\n    ids = psu_id,\n    strata = strata,\n    weights = weight,\n    nest = FALSE,\n    check_strata = FALSE\n  )\ndesign\n\n\nStratified Independent Sampling design (with replacement)\nCalled via srvyr\nSampling variables:\n  - ids: psu_id \n  - strata: strata \n  - weights: weight \nData variables: \n  - weight (dbl), strata (dbl), psu_id (int), state (fct), diabetes (fct),\n    diabetes_yes (int), genhlth (fct), fair_poor (int), cost_barrier (fct),\n    income (fct), age_group (fct), age (dbl), sex (fct), race_eth (fct),\n    education (fct), employment (fct)\nThe weights add up to the number of adults the sample represents: 263,783,390.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#the-survey-design-object",
+    "href": "03-descriptives.html#the-survey-design-object",
+    "title": "3  Descriptive Statistics",
+    "section": "",
+    "text": "ids: the primary sampling units (clusters);\nstrata: the strata;\nweights: the final weight.\n\n\n\n\n\n\n\n\nTipWhy check_strata = FALSE?\n\n\n\nBy default the design checks that every PSU lies within a single stratum. Depending on the survey package version, this check can create a large PSU-by-stratum table. The psu_id variable numbers each stratum-PSU pair, so the PSUs are nested in strata by construction. Chapter 2 verifies that each identifier belongs to exactly one stratum before this check is disabled. Keep the default check unless you have verified that nesting condition.\n\n\n\n\n\n\n\n\n\nWarningWhat ignoring the design does\n\n\n\n\nWithout weights, estimates describe the sample, not the population. Groups that answer surveys more often (older adults, for example) count too much.\nWithout strata and clusters, standard errors are wrong, so confidence intervals and p-values are wrong too. Clustering usually makes them too small.\n\n\n\n\n3.1.1 Strata with a single PSU\nVariance estimation compares PSUs within each stratum, which is impossible when a stratum has only one PSU.\n\n\nCode\nbrfss_clean |&gt;\n  tidylog::summarise(n_psu = dplyr::n_distinct(psu_id), .by = strata) |&gt;\n  tidylog::filter(n_psu == 1)\n\n\nsummarise: now 2,393 rows and 2 columns, ungrouped\nfilter: removed 2,283 rows (95%), 110 rows remaining\n\n\n# A tibble: 110 × 2\n   strata n_psu\n    &lt;dbl&gt; &lt;int&gt;\n 1  22049     1\n 2  42029     1\n 3  42019     1\n 4  52049     1\n 5  62049     1\n 6  62059     1\n 7  81132     1\n 8  81062     1\n 9  81012     1\n10  82029     1\n# ℹ 100 more rows\n\n\n_common.R sets options(survey.lonely.psu = \"adjust\"), which centers such a stratum on the overall mean instead of its own (see ?survey::surveyoptions for the alternatives).",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#sec-descriptive-cache",
+    "href": "03-descriptives.html#sec-descriptive-cache",
+    "title": "3  Descriptive Statistics",
+    "section": "3.2 Calculate once, then reuse",
+    "text": "3.2 Calculate once, then reuse\nThe expensive summary chunks below use Quarto’s built-in R cache:\n#| cache: true\nOn later renders, unchanged chunks reload their objects and output. The setup checks the input data’s contents, all R code in this chapter, project settings, R/package versions and survey options. Changing those inputs triggers a new calculation; editing prose does not. Full and smoke caches have separate folders.\nAfter Chapters 1–2, render just this chapter while working on your tables:\nquarto render book/03-descriptives.qmd\nquarto render book/03-descriptives.qmd --cache-refresh\nThe second command forces recalculation. Caching applies when rendering, not when running individual lines in the R console. Importing, imputation and modeling chapters use the same chunk option for their expensive calculations.\nIn this BRFSS dataset, each respondent is a PSU, so aggregation by PSU does not reduce the row count. Build the design before selecting an analysis domain, then subset the design object to retain the information needed for variance estimation.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#table-1-who-the-population-is",
+    "href": "03-descriptives.html#table-1-who-the-population-is",
+    "title": "3  Descriptive Statistics",
+    "section": "3.3 Table 1: who the population is",
+    "text": "3.3 Table 1: who the population is\ngtsummary::tbl_svysummary() makes a publication-ready table from a design object. We show unweighted counts (how many people answered) with weighted percentages (the estimate for the population), and the number of missing answers for each variable.\n\n\nCode\nlabels &lt;- list(\n  diabetes = \"Diabetes\",\n  genhlth = \"General health\",\n  cost_barrier = \"Could not afford a doctor in the past year\",\n  income = \"Household income\",\n  age_group = \"Age group\",\n  sex = \"Sex\",\n  race_eth = \"Race and ethnicity\"\n)\nstopifnot(all(vapply(brfss_clean[names(labels)], is.factor, TRUE)))\n\ntable1 &lt;- design |&gt;\n  gtsummary::tbl_svysummary(\n    include = names(labels),\n    label = labels,\n    type = gtsummary::all_categorical() ~ \"categorical\",\n    statistic = gtsummary::all_categorical() ~ \"{n_unweighted} ({p}%)\",\n    missing_stat = \"{N_miss_unweighted}\",\n    missing_text = \"Missing\"\n  )\ntable1 |&gt;\n  gtsummary::modify_caption(\n    \"**Table 1. Characteristics of US adults, BRFSS 2024**\"\n  )\n\n\n\n\n\n\nTable 1. Characteristics of US adults, BRFSS 2024\n\n\n\n\n\n\nCharacteristic\nN = 263,783,3901\n\n\n\n\nDiabetes\n\n\n\n\n    No\n379,520 (85%)\n\n\n    Prediabetes\n11,307 (2.6%)\n\n\n    Yes\n65,809 (13%)\n\n\n    Missing\n1,034\n\n\nGeneral health\n\n\n\n\n    Excellent\n64,217 (15%)\n\n\n    Very good\n145,791 (31%)\n\n\n    Good\n156,229 (35%)\n\n\n    Fair\n67,919 (15%)\n\n\n    Poor\n22,204 (4.6%)\n\n\n    Missing\n1,310\n\n\nCould not afford a doctor in the past year\n\n\n\n\n    No\n412,634 (88%)\n\n\n    Yes\n43,363 (12%)\n\n\n    Missing\n1,673\n\n\nHousehold income\n\n\n\n\n    Less than $25,000\n54,303 (15%)\n\n\n    $25,000 to $49,999\n91,388 (24%)\n\n\n    $50,000 to $99,999\n112,409 (28%)\n\n\n    $100,000 or more\n112,147 (32%)\n\n\n    Missing\n87,423\n\n\nAge group\n\n\n\n\n    18-24\n29,694 (12%)\n\n\n    25-34\n49,994 (17%)\n\n\n    35-44\n60,418 (17%)\n\n\n    45-54\n64,458 (15%)\n\n\n    55-64\n80,280 (16%)\n\n\n    65 or older\n172,826 (24%)\n\n\nSex\n\n\n\n\n    Female\n240,183 (51%)\n\n\n    Male\n217,487 (49%)\n\n\nRace and ethnicity\n\n\n\n\n    Non-Hispanic White\n336,908 (58%)\n\n\n    Non-Hispanic Black\n35,559 (12%)\n\n\n    Non-Hispanic Asian\n12,760 (6.1%)\n\n\n    Non-Hispanic American Indian or Alaska Native\n6,621 (1.1%)\n\n\n    Hispanic\n48,961 (19%)\n\n\n    Non-Hispanic other race\n16,861 (4.2%)\n\n\n\n1 n (unweighted) (%)",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#table-2-outcomes-by-income",
+    "href": "03-descriptives.html#table-2-outcomes-by-income",
+    "title": "3  Descriptive Statistics",
+    "section": "3.4 Table 2: outcomes by income",
+    "text": "3.4 Table 2: outcomes by income\nAdding by = income splits the table by income group, and gtsummary::add_p() tests whether each outcome differs across the groups. For categorical variables in survey data the test is the Rao-Scott test, reported as a design-adjusted F test by survey::svychisq(statistic = \"F\"). It accounts for weights, strata, and clusters.\n\n\nCode\ntable2 &lt;- design |&gt;\n  gtsummary::tbl_svysummary(\n    by = income,\n    include = c(diabetes, genhlth, cost_barrier),\n    label = labels[c(\"diabetes\", \"genhlth\", \"cost_barrier\")],\n    type = gtsummary::all_categorical() ~ \"categorical\",\n    statistic = gtsummary::all_categorical() ~ \"{n_unweighted} ({p}%)\",\n    missing_stat = \"{N_miss_unweighted}\",\n    missing_text = \"Missing\"\n  ) |&gt;\n  gtsummary::add_overall() |&gt;\n  gtsummary::add_p(test = gtsummary::all_categorical() ~ \"svy.chisq.test\")\n\n\n87423 rows with missingness in the \"income\" column have been removed with\n`subset()`.\n\n\nCode\ntable2 |&gt;\n  gtsummary::modify_caption(\"**Table 2. Health outcomes by household income**\")\n\n\n\n\n\n\nTable 2. Health outcomes by household income\n\n\n\n\n\n\n\n\n\n\n\nCharacteristic\nOverall\nN = 208,811,7531\nLess than $25,000\nN = 31,861,4721\n$25,000 to $49,999\nN = 50,013,5861\n$50,000 to $99,999\nN = 59,323,4471\n$100,000 or more\nN = 67,613,2481\np-value2\n\n\n\n\nDiabetes\n\n\n\n\n\n\n\n\n\n\n&lt;0.001\n\n\n    No\n307,175 (85%)\n40,141 (76%)\n72,291 (81%)\n94,498 (86%)\n100,245 (90%)\n\n\n\n\n    Prediabetes\n9,059 (2.6%)\n2,061 (4.1%)\n2,744 (3.2%)\n2,515 (2.4%)\n1,739 (1.7%)\n\n\n\n\n    Yes\n53,472 (13%)\n11,911 (20%)\n16,187 (16%)\n15,282 (11%)\n10,092 (8.1%)\n\n\n\n\n    Missing\n541\n190\n166\n114\n71\n\n\n\n\nGeneral health\n\n\n\n\n\n\n\n\n\n\n&lt;0.001\n\n\n    Excellent\n52,058 (15%)\n4,384 (9.7%)\n9,355 (12%)\n15,141 (15%)\n23,178 (21%)\n\n\n\n\n    Very good\n120,353 (31%)\n8,883 (16%)\n24,108 (25%)\n40,147 (34%)\n47,215 (41%)\n\n\n\n\n    Good\n125,865 (34%)\n18,358 (35%)\n34,557 (38%)\n40,294 (36%)\n32,656 (30%)\n\n\n\n\n    Fair\n53,831 (15%)\n15,373 (28%)\n17,588 (19%)\n13,427 (12%)\n7,443 (7.0%)\n\n\n\n\n    Poor\n17,440 (4.4%)\n7,076 (11%)\n5,569 (5.9%)\n3,237 (2.8%)\n1,558 (1.4%)\n\n\n\n\n    Missing\n700\n229\n211\n163\n97\n\n\n\n\nCould not afford a doctor in the past year\n\n\n\n\n\n\n\n\n\n\n&lt;0.001\n\n\n    No\n333,783 (88%)\n43,757 (77%)\n78,643 (82%)\n103,274 (89%)\n108,109 (96%)\n\n\n\n\n    Yes\n35,523 (12%)\n10,191 (23%)\n12,463 (18%)\n8,931 (11%)\n3,938 (4.4%)\n\n\n\n\n    Missing\n941\n355\n282\n204\n100\n\n\n\n\n\n1 n (unweighted) (%)\n\n\n2 Pearson’s X^2: Rao & Scott adjustment\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nNoteWho is missing from Table 2?\n\n\n\nA table split by income can only include people whose income is known, so the 87,423 respondents without an income answer are left out of every column except “Overall”. The same happens in any analysis that drops incomplete answers (“complete-case analysis”). The rest of this chapter asks whether that matters.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#sec-continuous-test",
+    "href": "03-descriptives.html#sec-continuous-test",
+    "title": "3  Descriptive Statistics",
+    "section": "3.5 Testing a continuous variable",
+    "text": "3.5 Testing a continuous variable\nDoes mean age differ across the four income groups? age is the numeric BRFSS variable _AGE80: CDC-imputed age in years, with everyone aged 80 or older recorded as 80. The comparison therefore concerns this capped age variable, not exact age above 80. See the CDC calculated-variable definitions. The regression chapters continue to use age_group.\nFirst select respondents with known income from the full survey design. Report weighted means and 95% confidence intervals before interpreting a test.\n\n\nCode\nincome_design &lt;- design |&gt; dplyr::filter(!is.na(income))\n\n\n\n\nCode\nmean_age &lt;- income_design |&gt;\n  dplyr::group_by(income) |&gt;\n  dplyr::summarise(\n    age = srvyr::survey_mean(age, na.rm = TRUE, vartype = \"ci\")\n  )\nmean_age\n\n\n# A tibble: 4 × 4\n  income               age age_low age_upp\n  &lt;fct&gt;              &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;\n1 Less than $25,000   48.8    48.5    49.2\n2 $25,000 to $49,999  49.0    48.7    49.3\n3 $50,000 to $99,999  48.5    48.3    48.8\n4 $100,000 or more    47.0    46.8    47.2\n\n\nFor more than two groups, fit a survey-weighted linear model and test the income coefficients together. With four groups there are three coefficients; the null hypothesis is that all three are zero, so all four population means are equal. The joint Wald F test uses the survey design for its variance.\n\n\nCode\nage_fit &lt;- survey::svyglm(age ~ income, design = income_design)\nage_test &lt;- survey::regTermTest(age_fit, ~income, method = \"Wald\")\nrm(age_fit) # Cache the test result rather than the full model.\nage_test\n\n\nWald test for income\n in svyglm(formula = age ~ income, design = income_design)\nF =  65.4856  on  3  and  367882  df: p= &lt; 2.22e-16 \n\n\nThe p-value is &lt;0.001. A small p-value is evidence that at least one mean differs; it does not identify which pairs differ or establish that a difference is practically important. Use the means and confidence intervals to describe the size of the differences.\n\n3.5.1 Put the mean test in a summary table\ngtsummary::add_p() accepts a short custom function returning a p-value. This function applies the same model and joint test to a numeric variable and a categorical grouping variable.\n\n\nCode\nmean_test &lt;- function(data, variable, by, ...) {\n  fit &lt;- survey::svyglm(stats::reformulate(by, variable), design = data)\n  test &lt;- survey::regTermTest(fit, stats::reformulate(by), method = \"Wald\")\n  tibble::tibble(\n    p.value = as.numeric(test$p),\n    method = \"Survey-weighted joint Wald test of means\"\n  )\n}\n\n\n\n\nCode\nage_table &lt;- income_design |&gt;\n  gtsummary::tbl_svysummary(\n    by = income,\n    include = age,\n    label = age ~ \"Age (years, capped at 80)\",\n    type = age ~ \"continuous\",\n    statistic = age ~ \"{mean} ({sd})\"\n  ) |&gt;\n  gtsummary::add_p(test = age ~ mean_test)\nage_table |&gt;\n  gtsummary::modify_caption(\"**Mean age (SD) by household income**\")\n\n\n\n\n\n\nMean age (SD) by household income\n\n\n\n\n\n\n\n\n\n\nCharacteristic\nLess than $25,000\nN = 31,861,4721\n$25,000 to $49,999\nN = 50,013,5861\n$50,000 to $99,999\nN = 59,323,4471\n$100,000 or more\nN = 67,613,2481\np-value2\n\n\n\n\nAge (years, capped at 80)\n49 (19)\n49 (20)\n49 (18)\n47 (15)\n&lt;0.001\n\n\n\n1 Mean (SD)\n\n\n2 Survey-weighted joint Wald test of means\n\n\n\n\n\n\n\n\nThe parentheses contain the weighted standard deviation, which describes variation in age, rather than the standard error of the mean. In a table with both variable types, use all_continuous() ~ mean_test and all_categorical() ~ \"svy.chisq.test\" in the test list.\nFor two groups, survey::svyttest() is a direct test of the difference in means; the corresponding gtsummary alias is \"svy.t.test\". The alias \"svy.wald.test\" instead calls a contingency-table test of independence and should not be used to test continuous means. See the gtsummary test definitions. Ordinary t.test() and aov() do not account for this survey design.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#prevalence-with-confidence-intervals",
+    "href": "03-descriptives.html#prevalence-with-confidence-intervals",
+    "title": "3  Descriptive Statistics",
+    "section": "3.6 Prevalence with confidence intervals",
+    "text": "3.6 Prevalence with confidence intervals\nsrvyr::survey_mean() estimates a weighted mean, here the share of adults with diabetes and with fair or poor health, with its 95% confidence interval. Grouping by income keeps the missing-income group as its own row.\n\n\nCode\nprevalence &lt;- design |&gt;\n  dplyr::group_by(income) |&gt;\n  dplyr::summarise(\n    diabetes = srvyr::survey_mean(diabetes_yes, na.rm = TRUE, vartype = \"ci\"),\n    fair_poor = srvyr::survey_mean(fair_poor, na.rm = TRUE, vartype = \"ci\")\n  )\nprevalence\n\n\n# A tibble: 5 × 7\n  income             diabetes diabetes_low diabetes_upp fair_poor fair_poor_low\n  &lt;fct&gt;                 &lt;dbl&gt;        &lt;dbl&gt;        &lt;dbl&gt;     &lt;dbl&gt;         &lt;dbl&gt;\n1 Less than $25,000    0.196        0.189        0.204     0.394         0.385 \n2 $25,000 to $49,999   0.156        0.150        0.161     0.250         0.244 \n3 $50,000 to $99,999   0.114        0.110        0.118     0.150         0.145 \n4 $100,000 or more     0.0814       0.0778       0.0851    0.0845        0.0806\n5 &lt;NA&gt;                 0.123        0.118        0.128     0.218         0.212 \n# ℹ 1 more variable: fair_poor_upp &lt;dbl&gt;\n\n\nDiabetes falls steadily with income, from 19.6% in the lowest group to 8.1% in the highest. Adults who did not report their income (the NA row) have a diabetes prevalence of 12.3%, close to the population average. On this outcome they resemble the people who reported their income; the last section of this chapter shows how they differ in age and health.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#why-the-design-matters",
+    "href": "03-descriptives.html#why-the-design-matters",
+    "title": "3  Descriptive Statistics",
+    "section": "3.7 Why the design matters",
+    "text": "3.7 Why the design matters\n\n3.7.1 Weights change the estimate\n\n\nCode\nbrfss_clean |&gt;\n  tidylog::summarise(diabetes_unweighted = mean(diabetes_yes, na.rm = TRUE))\n\n\nsummarise: now one row and one column, ungrouped\n\n\n# A tibble: 1 × 1\n  diabetes_unweighted\n                &lt;dbl&gt;\n1               0.144\n\n\n\n\n3.7.2 The design changes the uncertainty\nThe design effect (DEFF) compares the variance of an estimate under the survey design with its variance under a simple random sample of the same size:\n\\[\n\\text{DEFF} = \\frac{\\text{Variance}_\\text{survey design}}{\\text{Variance}_\\text{simple random sample}},\n\\qquad\nn_\\text{effective} = \\frac{n}{\\text{DEFF}}\n\\]\nA DEFF of 2 means the survey gives as much information as a simple random sample half its size, and standard errors are \\(\\sqrt{2} \\approx 1.4\\) times larger.\n\n\nCode\ndesign_effects &lt;- design |&gt;\n  dplyr::summarise(\n    diabetes = srvyr::survey_mean(diabetes_yes, na.rm = TRUE, deff = TRUE),\n    n_diabetes = srvyr::unweighted(sum(!is.na(diabetes_yes))),\n    fair_poor = srvyr::survey_mean(fair_poor, na.rm = TRUE, deff = TRUE),\n    n_fair_poor = srvyr::unweighted(sum(!is.na(fair_poor)))\n  ) |&gt;\n  dplyr::mutate(\n    n_effective_diabetes = n_diabetes / diabetes_deff,\n    n_effective_fair_poor = n_fair_poor / fair_poor_deff\n  )\ndesign_effects\n\n\n# A tibble: 1 × 10\n  diabetes diabetes_se diabetes_deff n_diabetes fair_poor fair_poor_se\n     &lt;dbl&gt;       &lt;dbl&gt;         &lt;dbl&gt;      &lt;int&gt;     &lt;dbl&gt;        &lt;dbl&gt;\n1    0.125     0.00111          5.10     456636     0.196      0.00134\n# ℹ 4 more variables: fair_poor_deff &lt;dbl&gt;, n_fair_poor &lt;int&gt;,\n#   n_effective_diabetes &lt;dbl&gt;, n_effective_fair_poor &lt;dbl&gt;\n\n\nThe unweighted prevalence of diabetes is 14.4%; weighted, it is 12.5%. The design effect is 5.1 for diabetes and 5.25 for fair or poor health, so the 456,636 answers about diabetes carry as much information as about 89,595 answers from a simple random sample. In BRFSS most of the design effect comes from the unequal weights, because each respondent is their own PSU.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "03-descriptives.html#missing-data",
+    "href": "03-descriptives.html#missing-data",
+    "title": "3  Descriptive Statistics",
+    "section": "3.8 Missing data",
+    "text": "3.8 Missing data\n\n3.8.1 How much is missing?\n\n\nCode\nbrfss_clean |&gt;\n  tidylog::summarise(dplyr::across(\n    c(\n      diabetes,\n      genhlth,\n      cost_barrier,\n      income,\n      age_group,\n      sex,\n      race_eth,\n      education,\n      employment\n    ),\n    \\(x) round(100 * mean(is.na(x)), 1)\n  )) |&gt;\n  tidyr::pivot_longer(\n    dplyr::everything(),\n    names_to = \"variable\",\n    values_to = \"percent_missing\"\n  )\n\n\nsummarise: now one row and 9 columns, ungrouped\n\n\n# A tibble: 9 × 2\n  variable     percent_missing\n  &lt;chr&gt;                  &lt;dbl&gt;\n1 diabetes                 0.2\n2 genhlth                  0.3\n3 cost_barrier             0.4\n4 income                  19.1\n5 age_group                0  \n6 sex                      0  \n7 race_eth                 0  \n8 education                0.5\n9 employment               1.8\n\n\n\n\n3.8.2 Who is missing income?\nIf income were missing completely at random, the share of missing income would be the same in every group. The design-based estimates below show it is not.\n\n\nCode\ndesign |&gt;\n  dplyr::group_by(age_group) |&gt;\n  dplyr::summarise(\n    income_missing = srvyr::survey_mean(is.na(income), vartype = \"ci\")\n  )\n\n\n# A tibble: 6 × 4\n  age_group   income_missing income_missing_low income_missing_upp\n  &lt;fct&gt;                &lt;dbl&gt;              &lt;dbl&gt;              &lt;dbl&gt;\n1 18-24                0.317              0.307              0.327\n2 25-34                0.169              0.162              0.175\n3 35-44                0.161              0.155              0.168\n4 45-54                0.173              0.167              0.180\n5 55-64                0.185              0.178              0.191\n6 65 or older          0.252              0.247              0.258\n\n\nCode\ndesign |&gt;\n  dplyr::group_by(genhlth) |&gt;\n  dplyr::summarise(\n    income_missing = srvyr::survey_mean(is.na(income), vartype = \"ci\")\n  )\n\n\n# A tibble: 6 × 4\n  genhlth   income_missing income_missing_low income_missing_upp\n  &lt;fct&gt;              &lt;dbl&gt;              &lt;dbl&gt;              &lt;dbl&gt;\n1 Excellent          0.204              0.197              0.211\n2 Very good          0.186              0.182              0.191\n3 Good               0.214              0.209              0.219\n4 Fair               0.228              0.221              0.236\n5 Poor               0.240              0.226              0.255\n6 &lt;NA&gt;               0.516              0.458              0.573\n\n\n\n\n\n\n\n\nImportantThree kinds of missing data\n\n\n\n\nMissing completely at random (MCAR): missingness is unrelated to anything. Dropping incomplete answers loses precision but does not bias estimates.\nMissing at random (MAR): missingness depends on observed variables (here, age and health). Dropping incomplete answers can bias estimates; multiple imputation that includes those variables does not.\nMissing not at random (MNAR): missingness depends on the missing value itself (for example, people with very high incomes declining to say). Neither approach fixes this on its own; it calls for sensitivity analyses.\n\nIncome missingness varies with age and health, so MCAR is not plausible. Chapter 4 works under MAR, the standard assumption for multiple imputation.",
+    "crumbs": [
+      "Describing the population",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Descriptive Statistics</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html",
+    "href": "04-imputation.html",
+    "title": "4  Multiple Imputation",
+    "section": "",
+    "text": "4.1 Why not just drop incomplete answers?\nMost R modeling functions silently drop every respondent with a missing value in any model variable. Household income is missing for 19.1% of respondents, so a model of diabetes by income would lose about one adult in five. Chapter 3 showed that the people who do not report income are older, in worse health, and more likely to have diabetes than those who do. Dropping them loses precision and can bias the results.\nMultiple imputation keeps everyone. It works in three steps:\nWe use the mice package (multivariate imputation by chained equations), which imputes one variable at a time from the others and cycles through them until the imputations stabilize.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#why-not-just-drop-incomplete-answers",
+    "href": "04-imputation.html#why-not-just-drop-incomplete-answers",
+    "title": "4  Multiple Imputation",
+    "section": "",
+    "text": "Impute. Fill in each missing value with a plausible value drawn from a model that predicts it from everything else we know about the person. Do this several times (here, 5 times) to create 5 completed datasets. The imputed values differ between datasets, and that difference expresses our uncertainty about the true values.\nAnalyze. Fit the same model to each completed dataset (Chapter 5, Chapter 6).\nPool. Combine the 5 results with Rubin’s rules into one estimate and one standard error that includes the uncertainty from imputation.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#the-data-to-impute",
+    "href": "04-imputation.html#the-data-to-impute",
+    "title": "4  Multiple Imputation",
+    "section": "4.2 The data to impute",
+    "text": "4.2 The data to impute\nWe impute the outcomes, the exposure, the covariates, and the two auxiliary variables (education and employment). Auxiliary variables are not in any model, but they predict income well, which makes the imputations more accurate and the “missing at random” assumption more plausible.\n\n\nCode\n# diabetes_yes and fair_poor are recomputed from the imputed diabetes and general health in\n# later chapters. Numeric age is used only in the descriptive example; models use age_group.\nimp_data &lt;- brfss_clean |&gt; tidylog::select(-diabetes_yes, -fair_poor, -age)\n\n\nselect: dropped 3 variables (diabetes_yes, fair_poor, age)\n\n\nCode\ncolSums(is.na(imp_data))\n\n\n      weight       strata       psu_id        state     diabetes      genhlth \n           0            0            0            0         1034         1310 \ncost_barrier       income    age_group          sex     race_eth    education \n        1673        87423            0            0            0         2363 \n  employment \n        8402 \n\n\n\n\n\n\n\n\nNoteInclude the outcome in the imputation model\n\n\n\nIt can feel like cheating to use diabetes to impute income. It is not: leaving the outcome out assumes income is unrelated to diabetes among the people with missing income, which biases the association toward zero.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#making-the-imputation-model-reflect-the-survey-design",
+    "href": "04-imputation.html#making-the-imputation-model-reflect-the-survey-design",
+    "title": "4  Multiple Imputation",
+    "section": "4.3 Making the imputation model reflect the survey design",
+    "text": "4.3 Making the imputation model reflect the survey design\nImputation models are regression models. If they ignore the survey design, the imputed values reflect the sample, and later weighted estimates can be biased. The practical recommendation (Reiter, Raghunathan, and Kinney, 2006) is to use the design variables as predictors:\n\nthe weight is a predictor, so imputed values can vary with it;\nthe strata and PSU identifiers have thousands of values (and one PSU per person), so they cannot be predictors. They stay in the data, untouched, for the survey design in the next chapters;\nthe state can represent geographic differences, but its 53 categories add parameters to each imputation model. This teaching example omits state from the default predictor matrix. The example below shows how to include it when imputing income. For a substantive analysis, assess the consequences of this simplification rather than choosing predictors on computing time alone.\n\nThe predictor matrix says which variables predict which: a 1 in row income, column weight means the weight is used to impute income.\n\n\nCode\npredictors &lt;- mice::make.predictorMatrix(imp_data)\npredictors[, c(\"strata\", \"psu_id\", \"state\")] &lt;- 0 # kept in the data, not used as predictors\npredictors\n\n\n             weight strata psu_id state diabetes genhlth cost_barrier income\nweight            0      0      0     0        1       1            1      1\nstrata            1      0      0     0        1       1            1      1\npsu_id            1      0      0     0        1       1            1      1\nstate             1      0      0     0        1       1            1      1\ndiabetes          1      0      0     0        0       1            1      1\ngenhlth           1      0      0     0        1       0            1      1\ncost_barrier      1      0      0     0        1       1            0      1\nincome            1      0      0     0        1       1            1      0\nage_group         1      0      0     0        1       1            1      1\nsex               1      0      0     0        1       1            1      1\nrace_eth          1      0      0     0        1       1            1      1\neducation         1      0      0     0        1       1            1      1\nemployment        1      0      0     0        1       1            1      1\n             age_group sex race_eth education employment\nweight               1   1        1         1          1\nstrata               1   1        1         1          1\npsu_id               1   1        1         1          1\nstate                1   1        1         1          1\ndiabetes             1   1        1         1          1\ngenhlth              1   1        1         1          1\ncost_barrier         1   1        1         1          1\nincome               1   1        1         1          1\nage_group            0   1        1         1          1\nsex                  1   0        1         1          1\nrace_eth             1   1        0         1          1\neducation            1   1        1         0          1\nemployment           1   1        1         1          0\n\n\n\n4.3.1 Example: a predictor for one variable only\nEach row of the predictor matrix is one imputation model (the variable being imputed), and each column is a possible predictor. Changing a single cell changes a single model. Income is the variable with the most missing values, so it is where design information matters most. To also use the state when imputing income, and nowhere else:\n\n\nCode\npredictors_state &lt;- predictors\npredictors_state[\"income\", \"state\"] &lt;- 1 # state predicts income only\npredictors_state[\"income\", ]\n\n\n      weight       strata       psu_id        state     diabetes      genhlth \n           1            0            0            1            1            1 \ncost_barrier       income    age_group          sex     race_eth    education \n           1            0            1            1            1            1 \n  employment \n           1 \n\n\nTo use it, replace predictorMatrix = predictors with predictorMatrix = predictors_state in the imputation below. Compare diagnostics and pooled estimates under both matrices to assess the effect of including state. The worked analysis uses predictors, which includes the weight but omits state.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#how-each-variable-is-imputed",
+    "href": "04-imputation.html#how-each-variable-is-imputed",
+    "title": "4  Multiple Imputation",
+    "section": "4.4 How each variable is imputed",
+    "text": "4.4 How each variable is imputed\nWe impute every variable with predictive mean matching (PMM). For each person with a missing value, PMM predicts the value from a regression, finds the respondents with an observed value whose predictions are closest, and copies the observed value of one of them, chosen at random. Imputed values are therefore always real answers (an income group, never “2.4”), and PMM is fast: one linear regression per variable.\n\n\nCode\nmethods &lt;- mice::make.method(imp_data, defaultMethod = rep(\"pmm\", 4))\nmethods\n\n\n      weight       strata       psu_id        state     diabetes      genhlth \n          \"\"           \"\"           \"\"           \"\"        \"pmm\"        \"pmm\" \ncost_barrier       income    age_group          sex     race_eth    education \n       \"pmm\"        \"pmm\"           \"\"           \"\"           \"\"        \"pmm\" \n  employment \n       \"pmm\" \n\n\nAn empty string means the variable has nothing missing.\n\n\n\n\n\n\nNotePMM or a model for each type of variable?\n\n\n\nmice’s defaults model each categorical variable by its type: logistic regression for two categories, proportional-odds regression for ordered ones, and multinomial regression for unordered ones. This teaching example uses PMM for all incomplete variables to keep the workflow compact. When adapting it, choose methods appropriate to each variable’s measurement scale, inspect the imputations and compare alternatives. A small proportion of missing values alone does not establish that a method is appropriate. Always report the method used for each variable.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#imputing-in-parallel-reproducibly",
+    "href": "04-imputation.html#imputing-in-parallel-reproducibly",
+    "title": "4  Multiple Imputation",
+    "section": "4.5 Imputing in parallel, reproducibly",
+    "text": "4.5 Imputing in parallel, reproducibly\nEach completed dataset is independent of the others, so they can be imputed at the same time on different processor cores. furrr::future_map() runs one imputation per task, and mice::ibind() combines the single imputations into one object. future::plan() sets the number of parallel workers. First detect the available cores; reserve one core and use at most four workers, or fewer if there are fewer imputations. The cap limits memory use because each worker holds its own data.\nThe main example uses 5 imputations to keep a classroom run short. For a substantive analysis, assess the fraction of missing information and the stability of pooled estimates and standard errors, and increase the number of imputations when needed.\nThe seed argument makes the results reproducible. furrr gives each task its own random-number stream derived from the seed, so the imputations are identical on every computer, whatever its number of cores. (mice::futuremice() also imputes in parallel, but its results depend on the number of cores.)\n\n\nCode\nn_cores &lt;- future::availableCores()\nn_workers &lt;- min(n_imputations, 4L, max(1L, n_cores - 1L))\ntibble::tibble(available_cores = n_cores, workers = n_workers)\n\n\n# A tibble: 1 × 2\n  available_cores workers\n            &lt;int&gt;   &lt;int&gt;\n1              14       4\n\n\nCode\nfuture::plan(future::multisession, workers = n_workers)\nstart &lt;- Sys.time()\nimputed &lt;- furrr::future_map(\n  seq_len(n_imputations),\n  \\(i) {\n    mice::mice(\n      imp_data,\n      m = 1,\n      maxit = 5,\n      method = methods,\n      predictorMatrix = predictors,\n      printFlag = FALSE\n    )\n  },\n  .options = furrr::furrr_options(seed = seed)\n) |&gt;\n  purrr::reduce(mice::ibind)\nfuture::plan(future::sequential)\nSys.time() - start\n\n\nTime difference of 1.949055 mins\n\n\nCode\n# Check: the number of imputations we asked for, and no missing values left.\nstopifnot(\n  imputed$m == n_imputations,\n  purrr::every(imputed$imp, \\(values) !anyNA(values))\n)\n\n\nmaxit = 5 (the mice default) runs five cycles through the variables for each imputation. Only income has much missing data and the other variables are almost complete, so the chains settle quickly; the convergence plots in the next section check that five cycles are enough.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#check-the-imputations",
+    "href": "04-imputation.html#check-the-imputations",
+    "title": "4  Multiple Imputation",
+    "section": "4.6 Check the imputations",
+    "text": "4.6 Check the imputations\nThree checks come before using imputed data.\n1. Did mice log any problems? NULL means none. Otherwise the log lists variables mice dropped from a model (for example, because they were constant or collinear).\n\n\nCode\nimputed$loggedEvents\n\n\nNULL\n\n\n2. Did the algorithm converge? Each line is one imputation (a “chain”): the mean and standard deviation of the imputed values at each iteration. The lines should mix freely, with no trend in the last iterations.\n\n\nCode\nplot(imputed, c(\"income\", \"genhlth\", \"education\", \"employment\"))\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n3. Are the imputed values plausible? Compare the imputed incomes with the reported ones.\n\n\nCode\ndplyr::bind_rows(\n  observed = dplyr::count(imp_data, income),\n  imputed = dplyr::count(\n    tibble::tibble(income = unlist(imputed$imp$income)),\n    income\n  ),\n  .id = \"values\"\n) |&gt;\n  tidylog::filter(!is.na(income)) |&gt;\n  tidylog::mutate(percent = round(100 * n / sum(n), 1), .by = values) |&gt;\n  tidyr::pivot_wider(\n    id_cols = income,\n    names_from = values,\n    values_from = percent\n  )\n\n\nfilter: removed one row (11%), 8 rows remaining\nmutate: new variable 'percent' (double) with 8 unique values and 0% NA\n\n\n# A tibble: 4 × 3\n  income             observed imputed\n  &lt;fct&gt;                 &lt;dbl&gt;   &lt;dbl&gt;\n1 Less than $25,000      14.7    19.1\n2 $25,000 to $49,999     24.7    28.2\n3 $50,000 to $99,999     30.4    29  \n4 $100,000 or more       30.3    23.7\n\n\nThe two distributions do not need to match. Under MAR they should differ when the people with missing income differ from those who reported it, as Chapter 3 showed. What we look for is plausibility: no impossible values, and differences that make sense.",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "04-imputation.html#save",
+    "href": "04-imputation.html#save",
+    "title": "4  Multiple Imputation",
+    "section": "4.7 Save",
+    "text": "4.7 Save\nThe mids object holds the original data and the imputed values; mice::complete() rebuilds the completed datasets from it in the next chapters.\n\n\nCode\nsaveRDS(imputed, file.path(processed_dir, \"04-imputed.rds\"))",
+    "crumbs": [
+      "Missing data",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Multiple Imputation</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html",
+    "href": "05-bivariate.html",
+    "title": "5  Bivariate Models",
+    "section": "",
+    "text": "5.1 Prevalence ratios\nA bivariate (or “crude”, or “unadjusted”) model relates the outcome to one variable at a time. Crude associations describe the population; they are not causal effects, because other variables are not held constant. Chapter 6 adjusts for them.\nOur outcome is whether an adult has ever been told they have diabetes (1 = yes, 0 = no or prediabetes). We compare the prevalence of diabetes between groups:\n\\[\n\\text{PR} = \\frac{\\text{prevalence of diabetes in a group}}{\\text{prevalence of diabetes in the reference group}}\n\\]\nA PR of 2 means the group has twice the prevalence of the reference group. A Poisson regression with a log link and a 0/1 outcome estimates prevalence ratios directly (“modified Poisson” regression): its exponentiated coefficients are PRs. Two details:",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html#prevalence-ratios",
+    "href": "05-bivariate.html#prevalence-ratios",
+    "title": "5  Bivariate Models",
+    "section": "",
+    "text": "We use family = quasipoisson() rather than poisson(), because survey weights are not whole numbers. The estimates are the same.\nA Poisson model’s own standard errors are wrong for a 0/1 outcome, but survey::svyglm() does not use them: it computes design-based (robust) standard errors from the weights, strata, and PSUs.\n\n\n\n\n\n\n\nTipWhy not odds ratios?\n\n\n\nLogistic regression estimates odds ratios. When an outcome is common, as diabetes is (about one adult in eight), odds ratios are further from 1 than prevalence ratios and are easily misread as “times as likely”. Prevalence ratios mean what they say.",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html#fitting-and-pooling",
+    "href": "05-bivariate.html#fitting-and-pooling",
+    "title": "5  Bivariate Models",
+    "section": "5.2 Fitting and pooling",
+    "text": "5.2 Fitting and pooling\nThree short functions do the work for every model in this chapter and the next:\n\nfit_each() takes each of the 5 completed datasets in turn (mice::complete(imputed, i)), adds the 0/1 diabetes outcome, turns the dataset into a survey design, and fits the model. It keeps only what pooling needs: the estimates, their covariance matrix, and the residual degrees of freedom. Survey designs and model objects can be large, so each is discarded after extracting these quantities rather than retained for all 5 datasets.\npool_fits() combines the 5 sets of estimates with Rubin’s rules, using mice::pool.table(), and exponentiates them into prevalence ratios.\nformat_pr() turns the pooled estimates into a readable table.\n\n\n\nCode\n# Fit one model per completed dataset; keep the estimates, their covariance matrix, and the\n# residual degrees of freedom. Each design is built, used, and discarded in turn.\nfit_each &lt;- function(imputed, formula) {\n  purrr::map(seq_len(imputed$m), \\(i) {\n    design &lt;- mice::complete(imputed, i) |&gt;\n      dplyr::mutate(diabetes_yes = as.integer(diabetes == \"Yes\")) |&gt;\n      srvyr::as_survey_design(\n        ids = psu_id,\n        strata = strata,\n        weights = weight,\n        check_strata = FALSE\n      )\n    fit &lt;- survey::svyglm(\n      formula,\n      design = design,\n      family = stats::quasipoisson()\n    )\n    list(\n      coef = stats::coef(fit),\n      vcov = stats::vcov(fit),\n      df = stats::df.residual(fit)\n    )\n  })\n}\n\npool_fits &lt;- function(fits) {\n  estimates &lt;- purrr::map(fits, \\(fit) {\n    tibble::tibble(\n      term = names(fit$coef),\n      estimate = fit$coef,\n      std.error = sqrt(diag(fit$vcov)),\n      df.residual = fit$df\n    )\n  })\n  mice::pool.table(purrr::list_rbind(estimates), exponentiate = TRUE)\n}\n\nformat_pr &lt;- function(pooled) {\n  pooled |&gt;\n    tibble::as_tibble() |&gt;\n    dplyr::filter(term != \"(Intercept)\") |&gt;\n    dplyr::transmute(\n      term,\n      `PR (95% CI)` = sprintf(\n        \"%.2f (%.2f to %.2f)\",\n        estimate,\n        conf.low,\n        conf.high\n      ),\n      p = format.pval(p.value, digits = 2, eps = 0.001)\n    )\n}",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html#rubins-rules-step-by-step",
+    "href": "05-bivariate.html#rubins-rules-step-by-step",
+    "title": "5  Bivariate Models",
+    "section": "5.3 Rubin’s rules, step by step",
+    "text": "5.3 Rubin’s rules, step by step\nHere is the crude model for income, pooled:\n\n\nCode\nincome_fits &lt;- fit_each(imputed, diabetes_yes ~ income)\nincome_pooled &lt;- pool_fits(income_fits)\nincome_pooled |&gt; dplyr::select(term, estimate, ubar, b, t, fmi)\n\n\n                      term  estimate         ubar            b            t\n1              (Intercept) 0.1934671 0.0002899907 3.155724e-05 0.0003278594\n2 income$25,000 to $49,999 0.7843799 0.0005433516 2.773875e-05 0.0005766381\n3 income$50,000 to $99,999 0.5810706 0.0005633291 1.978440e-04 0.0008007418\n4   income$100,000 or more 0.4157769 0.0007611278 6.485714e-05 0.0008389564\n         fmi\n1 0.12134871\n2 0.05929549\n3 0.32550393\n4 0.09665141\n\n\nFor each coefficient, Rubin’s rules combine the 5 results on the log scale (the estimate column above is already exponentiated into a PR):\n\nthe pooled estimate is the average of the 5 log PRs;\nubar is the average within-imputation variance (the usual squared standard error);\nb is the between-imputation variance (how much the estimates differ across datasets);\nt = ubar + (1 + 1/m) b is the total variance, which includes the uncertainty about the missing values;\nfmi is the fraction of missing information: the share of the total variance due to the missing data.\n\n\n\nCode\n# Check: the pooled log PR is the average of the per-dataset log PRs.\nstopifnot(isTRUE(all.equal(\n  unname(log(income_pooled$estimate)),\n  unname(rowMeans(do.call(cbind, purrr::map(income_fits, \"coef\"))))\n)))",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html#crude-prevalence-ratios-for-every-predictor",
+    "href": "05-bivariate.html#crude-prevalence-ratios-for-every-predictor",
+    "title": "5  Bivariate Models",
+    "section": "5.4 Crude prevalence ratios for every predictor",
+    "text": "5.4 Crude prevalence ratios for every predictor\nThe same three steps for each predictor:\n\n\nCode\npredictors &lt;- c(\"income\", \"age_group\", \"sex\", \"race_eth\")\ncrude &lt;- predictors |&gt;\n  purrr::map(\\(predictor) {\n    fits &lt;- if (predictor == \"income\") {\n      income_fits\n    } else {\n      fit_each(imputed, stats::reformulate(predictor, \"diabetes_yes\"))\n    }\n    return(pool_fits(fits))\n  }) |&gt;\n  purrr::list_rbind()\n\ncrude |&gt;\n  format_pr() |&gt;\n  knitr::kable(\n    caption = paste0(\n      \"Table 3. Crude prevalence ratios for diabetes (\",\n      n_imputations,\n      \" imputations)\"\n    )\n  )\n\n\n\nTable 3. Crude prevalence ratios for diabetes (5 imputations)\n\n\n\n\n\n\n\nterm\nPR (95% CI)\np\n\n\n\n\nincome$25,000 to $49,999\n0.78 (0.75 to 0.82)\n&lt;0.001\n\n\nincome$50,000 to $99,999\n0.58 (0.55 to 0.62)\n&lt;0.001\n\n\nincome$100,000 or more\n0.42 (0.39 to 0.44)\n&lt;0.001\n\n\nage_group25-34\n1.48 (1.20 to 1.83)\n&lt;0.001\n\n\nage_group35-44\n3.42 (2.81 to 4.17)\n&lt;0.001\n\n\nage_group45-54\n7.95 (6.58 to 9.60)\n&lt;0.001\n\n\nage_group55-64\n11.50 (9.55 to 13.86)\n&lt;0.001\n\n\nage_group65 or older\n13.61 (11.31 to 16.37)\n&lt;0.001\n\n\nsexMale\n1.08 (1.05 to 1.12)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Black\n1.45 (1.38 to 1.52)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Asian\n0.97 (0.86 to 1.10)\n0.61\n\n\nrace_ethNon-Hispanic American Indian or Alaska Native\n1.36 (1.20 to 1.54)\n&lt;0.001\n\n\nrace_ethHispanic\n1.13 (1.07 to 1.19)\n&lt;0.001\n\n\nrace_ethNon-Hispanic other race\n1.00 (0.92 to 1.09)\n0.93\n\n\n\n\n\nR names each coefficient by pasting the variable name and the group, so income$25,000 to $49,999 compares that income group with the reference group. The reference groups are the first level of each variable: less than $25,000; ages 18-24; female; and non-Hispanic White.\nDiabetes prevalence falls with income and rises steeply with age. Age is also related to income, which is why the crude income gradient may change once age is held constant (Chapter 6).",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "05-bivariate.html#save",
+    "href": "05-bivariate.html#save",
+    "title": "5  Bivariate Models",
+    "section": "5.5 Save",
+    "text": "5.5 Save\n\n\nCode\nsaveRDS(crude, file.path(processed_dir, \"05-crude.rds\"))",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Bivariate Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html",
+    "href": "06-multivariable.html",
+    "title": "6  Multivariable Models",
+    "section": "",
+    "text": "6.1 Helpers\nThe crude prevalence ratios in Chapter 5 mix the association of income with the associations of everything that travels with income. Age is the clearest example: adults 65 and older are less likely than middle-aged adults to have a high household income (many are retired) and far more likely to have diabetes. A multivariable model estimates the association of income with diabetes among adults of the same age group, sex, and race and ethnicity.\nThe three helper functions are the same as in Chapter 5.\nCode\n# Fit one model per completed dataset; keep the estimates, their covariance matrix, and the\n# residual degrees of freedom. Each design is built, used, and discarded in turn.\nfit_each &lt;- function(imputed, formula) {\n  purrr::map(seq_len(imputed$m), \\(i) {\n    design &lt;- mice::complete(imputed, i) |&gt;\n      dplyr::mutate(diabetes_yes = as.integer(diabetes == \"Yes\")) |&gt;\n      srvyr::as_survey_design(\n        ids = psu_id,\n        strata = strata,\n        weights = weight,\n        check_strata = FALSE\n      )\n    fit &lt;- survey::svyglm(\n      formula,\n      design = design,\n      family = stats::quasipoisson()\n    )\n    list(\n      coef = stats::coef(fit),\n      vcov = stats::vcov(fit),\n      df = stats::df.residual(fit)\n    )\n  })\n}\n\npool_fits &lt;- function(fits) {\n  estimates &lt;- purrr::map(fits, \\(fit) {\n    tibble::tibble(\n      term = names(fit$coef),\n      estimate = fit$coef,\n      std.error = sqrt(diag(fit$vcov)),\n      df.residual = fit$df\n    )\n  })\n  mice::pool.table(purrr::list_rbind(estimates), exponentiate = TRUE)\n}\n\nformat_pr &lt;- function(pooled) {\n  pooled |&gt;\n    tibble::as_tibble() |&gt;\n    dplyr::filter(term != \"(Intercept)\") |&gt;\n    dplyr::transmute(\n      term,\n      `PR (95% CI)` = sprintf(\n        \"%.2f (%.2f to %.2f)\",\n        estimate,\n        conf.low,\n        conf.high\n      ),\n      p = format.pval(p.value, digits = 2, eps = 0.001)\n    )\n}",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html#the-adjusted-model",
+    "href": "06-multivariable.html#the-adjusted-model",
+    "title": "6  Multivariable Models",
+    "section": "6.2 The adjusted model",
+    "text": "6.2 The adjusted model\nThe model has all four predictors at once.\n\n\nCode\nadjusted_fits &lt;- fit_each(\n  imputed,\n  diabetes_yes ~ income + age_group + sex + race_eth\n)\nadjusted &lt;- pool_fits(adjusted_fits)\n\ndplyr::left_join(\n  format_pr(crude),\n  format_pr(adjusted),\n  by = dplyr::join_by(term),\n  suffix = c(\", crude\", \", adjusted\")\n) |&gt;\n  knitr::kable(\n    caption = paste0(\n      \"Table 4. Crude and adjusted prevalence ratios for diabetes (\",\n      n_imputations,\n      \" imputations)\"\n    )\n  )\n\n\n\nTable 4. Crude and adjusted prevalence ratios for diabetes (5 imputations)\n\n\n\n\n\n\n\n\n\nterm\nPR (95% CI), crude\np, crude\nPR (95% CI), adjusted\np, adjusted\n\n\n\n\nincome$25,000 to $49,999\n0.78 (0.75 to 0.82)\n&lt;0.001\n0.83 (0.79 to 0.87)\n&lt;0.001\n\n\nincome$50,000 to $99,999\n0.58 (0.55 to 0.62)\n&lt;0.001\n0.64 (0.60 to 0.67)\n&lt;0.001\n\n\nincome$100,000 or more\n0.42 (0.39 to 0.44)\n&lt;0.001\n0.47 (0.44 to 0.50)\n&lt;0.001\n\n\nage_group25-34\n1.48 (1.20 to 1.83)\n&lt;0.001\n1.57 (1.27 to 1.94)\n&lt;0.001\n\n\nage_group35-44\n3.42 (2.81 to 4.17)\n&lt;0.001\n3.82 (3.14 to 4.65)\n&lt;0.001\n\n\nage_group45-54\n7.95 (6.58 to 9.60)\n&lt;0.001\n9.13 (7.56 to 11.03)\n&lt;0.001\n\n\nage_group55-64\n11.50 (9.55 to 13.86)\n&lt;0.001\n13.00 (10.80 to 15.66)\n&lt;0.001\n\n\nage_group65 or older\n13.61 (11.31 to 16.37)\n&lt;0.001\n14.95 (12.43 to 17.98)\n&lt;0.001\n\n\nsexMale\n1.08 (1.05 to 1.12)\n&lt;0.001\n1.21 (1.17 to 1.25)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Black\n1.45 (1.38 to 1.52)\n&lt;0.001\n1.49 (1.42 to 1.56)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Asian\n0.97 (0.86 to 1.10)\n0.61\n1.50 (1.34 to 1.68)\n&lt;0.001\n\n\nrace_ethNon-Hispanic American Indian or Alaska Native\n1.36 (1.20 to 1.54)\n&lt;0.001\n1.38 (1.23 to 1.55)\n&lt;0.001\n\n\nrace_ethHispanic\n1.13 (1.07 to 1.19)\n&lt;0.001\n1.36 (1.29 to 1.43)\n&lt;0.001\n\n\nrace_ethNon-Hispanic other race\n1.00 (0.92 to 1.09)\n0.93\n1.17 (1.08 to 1.27)\n&lt;0.001\n\n\n\n\n\nEach adjusted PR compares two groups that are alike on the other variables in the model. For example, the PR for income$100,000 or more compares adults in the highest income group with adults earning less than $25,000 of the same age group, sex, and race and ethnicity.",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html#does-income-matter-overall",
+    "href": "06-multivariable.html#does-income-matter-overall",
+    "title": "6  Multivariable Models",
+    "section": "6.3 Does income matter overall?",
+    "text": "6.3 Does income matter overall?\nIncome has four groups, so it has three PRs, each with its own p-value. To ask whether income is associated with diabetes at all, we test the three coefficients together (null hypothesis: all three are zero on the log scale). mitml::testConstraints() runs this multivariate Wald test across imputations (the “D1” statistic, pooled with Rubin’s rules) from each dataset’s estimates and covariance matrix.\n\n\nCode\nincome_terms &lt;- grep(\"^income\", names(adjusted_fits[[1]]$coef), value = TRUE)\nincome_test &lt;- mitml::testConstraints(\n  qhat = do.call(cbind, purrr::map(adjusted_fits, \"coef\")),\n  uhat = simplify2array(purrr::map(adjusted_fits, \\(fit) fit$vcov)),\n  constraints = paste0(\"`\", income_terms, \"`\"), # backticks: the names contain spaces\n  method = \"D1\"\n)\nincome_test\n\n\n\nCall:\n\nmitml::testConstraints(qhat = do.call(cbind, purrr::map(adjusted_fits, \n    \"coef\")), uhat = simplify2array(purrr::map(adjusted_fits, \n    function(fit) fit$vcov)), constraints = paste0(\"`\", income_terms, \n    \"`\"), method = \"D1\")\n\nHypothesis test calculated from 5 imputed data sets. The following\nconstraints were specified:\n\n                                 Estimate Std. Error \n   `income$25,000 to $49,999`:     -0.189      0.025 \n   `income$50,000 to $99,999`:     -0.453      0.026 \n   `income$100,000 or more`:       -0.758      0.031 \n\nCombination method: D1 \n\n    F.value     df1     df2   P(&gt;F)     RIV \n    236.034       3 162.100   0.000   0.242 \n\nUnadjusted hypothesis test as appropriate in larger samples.\n\n\ndf1 is the number of coefficients tested and P(&gt;F) the p-value.",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html#sensitivity-analysis-complete-cases",
+    "href": "06-multivariable.html#sensitivity-analysis-complete-cases",
+    "title": "6  Multivariable Models",
+    "section": "6.4 Sensitivity analysis: complete cases",
+    "text": "6.4 Sensitivity analysis: complete cases\nHow much did imputation change the results? The same model fit to complete cases drops everyone with a missing value. survey::svyglm() keeps the full design for the variance and gives the dropped respondents no weight in the estimates.\n\n\nCode\ncomplete_case &lt;- survey::svyglm(\n  diabetes_yes ~ income + age_group + sex + race_eth,\n  design = srvyr::as_survey_design(\n    brfss_clean,\n    ids = psu_id,\n    strata = strata,\n    weights = weight,\n    check_strata = FALSE\n  ),\n  family = stats::quasipoisson()\n)\ncomplete_case_pr &lt;- broom::tidy(\n  complete_case,\n  conf.int = TRUE,\n  exponentiate = TRUE\n)\ncomplete_case_n &lt;- stats::nobs(complete_case)\nrm(complete_case) # Cache the small results, not the full model object.\n\ndplyr::left_join(\n  format_pr(complete_case_pr),\n  format_pr(adjusted),\n  by = dplyr::join_by(term),\n  suffix = c(\", complete case\", \", imputed\")\n) |&gt;\n  knitr::kable(\n    caption = paste(\n      \"Table 5. Adjusted prevalence ratios:\",\n      \"complete case and multiple imputation\"\n    )\n  )\n\n\n\nTable 5. Adjusted prevalence ratios: complete case and multiple imputation\n\n\n\n\n\n\n\n\n\nterm\nPR (95% CI), complete case\np, complete case\nPR (95% CI), imputed\np, imputed\n\n\n\n\nincome$25,000 to $49,999\n0.84 (0.79 to 0.88)\n&lt;0.001\n0.83 (0.79 to 0.87)\n&lt;0.001\n\n\nincome$50,000 to $99,999\n0.63 (0.60 to 0.67)\n&lt;0.001\n0.64 (0.60 to 0.67)\n&lt;0.001\n\n\nincome$100,000 or more\n0.47 (0.44 to 0.50)\n&lt;0.001\n0.47 (0.44 to 0.50)\n&lt;0.001\n\n\nage_group25-34\n1.46 (1.13 to 1.89)\n0.0039\n1.57 (1.27 to 1.94)\n&lt;0.001\n\n\nage_group35-44\n3.52 (2.77 to 4.47)\n&lt;0.001\n3.82 (3.14 to 4.65)\n&lt;0.001\n\n\nage_group45-54\n8.52 (6.74 to 10.76)\n&lt;0.001\n9.13 (7.56 to 11.03)\n&lt;0.001\n\n\nage_group55-64\n12.19 (9.68 to 15.35)\n&lt;0.001\n13.00 (10.80 to 15.66)\n&lt;0.001\n\n\nage_group65 or older\n13.82 (10.99 to 17.38)\n&lt;0.001\n14.95 (12.43 to 17.98)\n&lt;0.001\n\n\nsexMale\n1.22 (1.18 to 1.27)\n&lt;0.001\n1.21 (1.17 to 1.25)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Black\n1.46 (1.39 to 1.54)\n&lt;0.001\n1.49 (1.42 to 1.56)\n&lt;0.001\n\n\nrace_ethNon-Hispanic Asian\n1.50 (1.32 to 1.70)\n&lt;0.001\n1.50 (1.34 to 1.68)\n&lt;0.001\n\n\nrace_ethNon-Hispanic American Indian or Alaska Native\n1.37 (1.21 to 1.56)\n&lt;0.001\n1.38 (1.23 to 1.55)\n&lt;0.001\n\n\nrace_ethHispanic\n1.33 (1.25 to 1.41)\n&lt;0.001\n1.36 (1.29 to 1.43)\n&lt;0.001\n\n\nrace_ethNon-Hispanic other race\n1.13 (1.03 to 1.24)\n0.0127\n1.17 (1.08 to 1.27)\n&lt;0.001\n\n\n\n\n\nThe complete-case model uses 369,706 respondents; the imputed models use all 457,670.\nWhere do the missing data matter? The fraction of missing information (fmi) is the share of each estimate’s variance that comes from the missing data. It is highest for the income terms, where most values were imputed, and close to zero for variables with nothing missing.\n\n\nCode\nadjusted |&gt; dplyr::transmute(term, pr = round(estimate, 2), fmi = round(fmi, 3))\n\n\n                                                    term    pr   fmi\n1                                            (Intercept)  0.02 0.019\n2                               income$25,000 to $49,999  0.83 0.186\n3                               income$50,000 to $99,999  0.64 0.350\n4                                 income$100,000 or more  0.47 0.238\n5                                         age_group25-34  1.57 0.017\n6                                         age_group35-44  3.82 0.020\n7                                         age_group45-54  9.13 0.018\n8                                         age_group55-64 13.00 0.016\n9                                   age_group65 or older 14.95 0.017\n10                                               sexMale  1.21 0.005\n11                            race_ethNon-Hispanic Black  1.49 0.027\n12                            race_ethNon-Hispanic Asian  1.50 0.005\n13 race_ethNon-Hispanic American Indian or Alaska Native  1.38 0.005\n14                                      race_ethHispanic  1.36 0.021\n15                       race_ethNon-Hispanic other race  1.17 0.001\n\n\n\n\n\n\n\n\nImportantWhen the two analyses disagree\n\n\n\nIf complete-case and imputed results differ substantially, report both and explain why, rather than choosing the one you like better. Under MAR the imputed results are the less biased ones; if missingness might depend on income itself (MNAR), neither is guaranteed to be right, and a sensitivity analysis for MNAR is the next step.",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html#reporting-the-results",
+    "href": "06-multivariable.html#reporting-the-results",
+    "title": "6  Multivariable Models",
+    "section": "6.5 Reporting the results",
+    "text": "6.5 Reporting the results\n\n\nCode\ntop_income &lt;- dplyr::filter(adjusted, term == \"income$100,000 or more\")\ntop_income_cc &lt;- dplyr::filter(\n  complete_case_pr,\n  term == \"income$100,000 or more\"\n)\n\n\nA results paragraph might read:\n\nWe analyzed 457,670 adults in the 2024 Behavioral Risk Factor Surveillance System, representing 263.8 million US adults. All estimates accounted for the survey weights, strata, and primary sampling units. Household income was missing for 19.1% of respondents, and missingness varied with age and general health. We multiply imputed missing values (5 imputations by chained equations with the mice package, version 3.19.0, predictive mean matching, with the survey weight as a predictor) and pooled estimates with Rubin’s rules. In a survey-weighted modified Poisson model adjusted for age group, sex, and race and ethnicity, adults with a household income of $100,000 or more had a prevalence of diabetes 0.47 times that of adults earning less than $25,000 (95% CI 0.44 to 0.50; joint test of income p &lt;0.001). In a complete-case analysis the prevalence ratio was 0.47 (95% CI 0.44 to 0.50).\n\n\n6.5.1 Reporting checklist\nFor any analysis of complex survey data, report:\n\nthe survey design (weights, strata, clusters) and that every estimate used it;\nthe unweighted sample size and the weighted population;\ndesign-based tests (for example, Rao-Scott chi-square) and confidence intervals;\ndesign effects for key estimates.\n\nWhen the analysis uses multiple imputation, also report:\n\nthe amount of missing data for each variable and evidence about why it is missing;\nthe imputation method for each variable, the number of imputations, and the software and version;\nthe variables in the imputation model, including how the survey design entered it;\nthat estimates were pooled with Rubin’s rules;\ncomplete-case results next to the imputed results.",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "06-multivariable.html#exercise",
+    "href": "06-multivariable.html#exercise",
+    "title": "6  Multivariable Models",
+    "section": "6.6 Exercise",
+    "text": "6.6 Exercise\nRepeat Chapter 5 and this chapter for fair or poor general health: in fit_each(), add fair_poor = as.integer(genhlth == \"Fair\" | genhlth == \"Poor\") next to diabetes_yes, then replace diabetes_yes with fair_poor in every model formula. Everything else, including the imputed data, can be reused. Is the income gradient steeper or flatter than for diabetes? How much does adjustment for age change it, and why might that differ from diabetes?",
+    "crumbs": [
+      "Modeling",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Multivariable Models</span>"
+    ]
+  },
+  {
+    "objectID": "decisions.html",
+    "href": "decisions.html",
+    "title": "Appendix A — Coding Decisions",
+    "section": "",
+    "text": "A.1 Decisions\nEvery analysis rests on coding decisions. This appendix lists them, with the number of respondents each one affects, so that a reader can check them and a later analysis can change them on purpose rather than by accident.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Coding Decisions</span>"
+    ]
+  },
+  {
+    "objectID": "decisions.html#decisions",
+    "href": "decisions.html#decisions",
+    "title": "Appendix A — Coding Decisions",
+    "section": "",
+    "text": "Decision\nReason\nRespondents affected\n\n\n\n\n“Don’t know”, “refused”, and blank answers become missing and are imputed\nThey carry no information about the true value; dropping them would lose about one adult in five from any model with income\nIncome: 87,423; employment: 8,402; education: 2,363; general health: 1,310; cost barrier: 1,673; diabetes: 1,034\n\n\nDiabetes told only during pregnancy (DIABETE4 = 2) is “No”\nGestational diabetes alone is not current diabetes; the answer settles the value\n3,395\n\n\nPrediabetes counts as “no diabetes” in the 0/1 outcome\nThe outcome is diagnosed diabetes\n11,307\n\n\nAge from _AGE_G (six groups, CDC-imputed) rather than _AGE65YR (two groups)\nBetter adjustment for age, a strong confounder; no missing values\nAll\n\n\nNumeric age from _AGE80, retained as years with 80 meaning 80 or older\nDemonstrates a survey-weighted comparison of means; models and imputation retain age groups\nAll\n\n\nRace and ethnicity from _IMPRACE (CDC-imputed)\nCDC fills missing answers for weighting; no missing values\nAll\n\n\nIncome in four groups: under $25,000; $25,000-$49,999; $50,000-$99,999; $100,000 or more\nEnough respondents per group; matches the descriptive tutorials\nAll with an income answer\n\n\nReference groups: lowest income, ages 18-24, female, non-Hispanic White\nLowest income: PRs describe the gradient from the bottom; non-Hispanic White: largest group\nAll\n\n\nPrevalence ratios (modified Poisson) rather than odds ratios\nDiabetes is common, so odds ratios would overstate the ratios of prevalences\nAll models\n\n\n5 imputations\nKeeps the classroom example short; assess stability and use more when needed for a substantive analysis\nAll models\n\n\nImputation by predictive mean matching for every variable, 5 iterations; the weight as a predictor, state omitted\nA compact teaching example; assess variable-specific methods, convergence and the effect of including state when adapting it (Chapter 4)\nAll imputed values",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Coding Decisions</span>"
+    ]
+  },
+  {
+    "objectID": "decisions.html#crosswalk",
+    "href": "decisions.html#crosswalk",
+    "title": "Appendix A — Coding Decisions",
+    "section": "A.2 Crosswalk",
+    "text": "A.2 Crosswalk\nEvery raw code and the value it became, from Chapter 2. NA in the code column is a blank answer; NA in the value column is a missing value.\n\n\nCode\nknitr::kable(crosswalk, format.args = list(big.mark = \",\"))\n\n\n\n\n\n\n\n\n\n\n\nitem\ncode\nvalue\nn\n\n\n\n\nDIABETE4\n1\nYes\n65,809\n\n\nDIABETE4\n2\nNo\n3,395\n\n\nDIABETE4\n3\nNo\n376,125\n\n\nDIABETE4\n4\nPrediabetes\n11,307\n\n\nDIABETE4\n7\nNA\n798\n\n\nDIABETE4\n9\nNA\n232\n\n\nDIABETE4\nNA\nNA\n4\n\n\nGENHLTH\n1\nExcellent\n64,217\n\n\nGENHLTH\n2\nVery good\n145,791\n\n\nGENHLTH\n3\nGood\n156,229\n\n\nGENHLTH\n4\nFair\n67,919\n\n\nGENHLTH\n5\nPoor\n22,204\n\n\nGENHLTH\n7\nNA\n915\n\n\nGENHLTH\n9\nNA\n390\n\n\nGENHLTH\nNA\nNA\n5\n\n\nMEDCOST1\n1\nYes\n43,363\n\n\nMEDCOST1\n2\nNo\n412,634\n\n\nMEDCOST1\n7\nNA\n1,229\n\n\nMEDCOST1\n9\nNA\n438\n\n\nMEDCOST1\nNA\nNA\n6\n\n\nINCOME3\n1\nLess than $25,000\n10,258\n\n\nINCOME3\n2\nLess than $25,000\n10,542\n\n\nINCOME3\n3\nLess than $25,000\n13,662\n\n\nINCOME3\n4\nLess than $25,000\n19,841\n\n\nINCOME3\n5\n$25,000 to $49,999\n41,702\n\n\nINCOME3\n6\n$25,000 to $49,999\n49,686\n\n\nINCOME3\n7\n$50,000 to $99,999\n60,709\n\n\nINCOME3\n8\n$50,000 to $99,999\n51,700\n\n\nINCOME3\n9\n$100,000 or more\n55,778\n\n\nINCOME3\n10\n$100,000 or more\n26,675\n\n\nINCOME3\n11\n$100,000 or more\n29,694\n\n\nINCOME3\n77\nNA\n37,113\n\n\nINCOME3\n99\nNA\n41,041\n\n\nINCOME3\nNA\nNA\n9,269\n\n\n_AGE_G\n1\n18-24\n29,694\n\n\n_AGE_G\n2\n25-34\n49,994\n\n\n_AGE_G\n3\n35-44\n60,418\n\n\n_AGE_G\n4\n45-54\n64,458\n\n\n_AGE_G\n5\n55-64\n80,280\n\n\n_AGE_G\n6\n65 or older\n172,826\n\n\n_AGE80\n18\n18\n3,773\n\n\n_AGE80\n19\n19\n4,009\n\n\n_AGE80\n20\n20\n4,159\n\n\n_AGE80\n21\n21\n4,290\n\n\n_AGE80\n22\n22\n4,197\n\n\n_AGE80\n23\n23\n4,502\n\n\n_AGE80\n24\n24\n4,764\n\n\n_AGE80\n25\n25\n4,926\n\n\n_AGE80\n26\n26\n4,629\n\n\n_AGE80\n27\n27\n4,695\n\n\n_AGE80\n28\n28\n4,774\n\n\n_AGE80\n29\n29\n4,685\n\n\n_AGE80\n30\n30\n5,635\n\n\n_AGE80\n31\n31\n4,597\n\n\n_AGE80\n32\n32\n5,287\n\n\n_AGE80\n33\n33\n5,420\n\n\n_AGE80\n34\n34\n5,346\n\n\n_AGE80\n35\n35\n5,924\n\n\n_AGE80\n36\n36\n5,512\n\n\n_AGE80\n37\n37\n5,654\n\n\n_AGE80\n38\n38\n6,001\n\n\n_AGE80\n39\n39\n5,933\n\n\n_AGE80\n40\n40\n6,891\n\n\n_AGE80\n41\n41\n5,462\n\n\n_AGE80\n42\n42\n6,651\n\n\n_AGE80\n43\n43\n6,294\n\n\n_AGE80\n44\n44\n6,096\n\n\n_AGE80\n45\n45\n6,496\n\n\n_AGE80\n46\n46\n5,774\n\n\n_AGE80\n47\n47\n6,021\n\n\n_AGE80\n48\n48\n5,694\n\n\n_AGE80\n49\n49\n5,764\n\n\n_AGE80\n50\n50\n6,887\n\n\n_AGE80\n51\n51\n5,467\n\n\n_AGE80\n52\n52\n6,910\n\n\n_AGE80\n53\n53\n7,336\n\n\n_AGE80\n54\n54\n8,109\n\n\n_AGE80\n55\n55\n7,870\n\n\n_AGE80\n56\n56\n7,057\n\n\n_AGE80\n57\n57\n7,028\n\n\n_AGE80\n58\n58\n7,256\n\n\n_AGE80\n59\n59\n7,466\n\n\n_AGE80\n60\n60\n9,066\n\n\n_AGE80\n61\n61\n7,534\n\n\n_AGE80\n62\n62\n9,177\n\n\n_AGE80\n63\n63\n8,786\n\n\n_AGE80\n64\n64\n9,040\n\n\n_AGE80\n65\n65\n10,386\n\n\n_AGE80\n66\n66\n9,124\n\n\n_AGE80\n67\n67\n9,810\n\n\n_AGE80\n68\n68\n9,483\n\n\n_AGE80\n69\n69\n9,062\n\n\n_AGE80\n70\n70\n10,484\n\n\n_AGE80\n71\n71\n8,696\n\n\n_AGE80\n72\n72\n9,440\n\n\n_AGE80\n73\n73\n8,910\n\n\n_AGE80\n74\n74\n8,585\n\n\n_AGE80\n75\n75\n8,824\n\n\n_AGE80\n76\n76\n8,109\n\n\n_AGE80\n77\n77\n8,314\n\n\n_AGE80\n78\n78\n6,395\n\n\n_AGE80\n79\n79\n5,434\n\n\n_AGE80\n80\n80\n41,770\n\n\nSEXVAR\n1\nMale\n217,487\n\n\nSEXVAR\n2\nFemale\n240,183\n\n\n_IMPRACE\n1\nNon-Hispanic White\n336,908\n\n\n_IMPRACE\n2\nNon-Hispanic Black\n35,559\n\n\n_IMPRACE\n3\nNon-Hispanic Asian\n12,760\n\n\n_IMPRACE\n4\nNon-Hispanic American Indian or Alaska Native\n6,621\n\n\n_IMPRACE\n5\nHispanic\n48,961\n\n\n_IMPRACE\n6\nNon-Hispanic other race\n16,861\n\n\nEDUCA\n1\nLess than high school\n723\n\n\nEDUCA\n2\nLess than high school\n9,226\n\n\nEDUCA\n3\nLess than high school\n17,200\n\n\nEDUCA\n4\nHigh school graduate\n115,877\n\n\nEDUCA\n5\nSome college\n120,732\n\n\nEDUCA\n6\nCollege graduate\n191,549\n\n\nEDUCA\n9\nNA\n2,356\n\n\nEDUCA\nNA\nNA\n7\n\n\nEMPLOY1\n1\nEmployed\n186,378\n\n\nEMPLOY1\n2\nEmployed\n39,146\n\n\nEMPLOY1\n3\nOut of work\n8,953\n\n\nEMPLOY1\n4\nOut of work\n10,812\n\n\nEMPLOY1\n5\nHomemaker or student\n17,832\n\n\nEMPLOY1\n6\nHomemaker or student\n11,473\n\n\nEMPLOY1\n7\nRetired\n146,916\n\n\nEMPLOY1\n8\nUnable to work\n27,758\n\n\nEMPLOY1\n9\nNA\n5,099\n\n\nEMPLOY1\nNA\nNA\n3,303",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>A</span>  <span class='chapter-title'>Coding Decisions</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html",
+    "href": "reproducibility.html",
+    "title": "Appendix B — Reproducibility",
+    "section": "",
+    "text": "B.1 The same packages: renv\nAnyone who runs this book should get the same numbers. Three things make that possible.\nR packages change between versions, and a new version can change a result. The renv package records the exact version of every package the book uses in renv.lock and installs those versions into a library inside the project (renv/library/), separate from your other R projects.\nrenv starts automatically when R opens in the project folder (through the .Rprofile file). The packages the book needs are listed in DESCRIPTION; renv records them and their dependencies.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html#the-same-packages-renv",
+    "href": "reproducibility.html#the-same-packages-renv",
+    "title": "Appendix B — Reproducibility",
+    "section": "",
+    "text": "Task\nCommand (R console, in the project)\n\n\n\n\nInstall the recorded versions (once, after downloading the project)\nrenv::restore()\n\n\nCheck that the installed packages match the lockfile\nrenv::status()\n\n\nAfter adding a package to DESCRIPTION and installing it\nrenv::snapshot()",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html#the-same-random-numbers-seeds",
+    "href": "reproducibility.html#the-same-random-numbers-seeds",
+    "title": "Appendix B — Reproducibility",
+    "section": "B.2 The same random numbers: seeds",
+    "text": "B.2 The same random numbers: seeds\nMultiple imputation draws random values. _common.R sets the same seed (2024) at the start of every chapter. The imputation runs one task per imputation in parallel, and furrr::furrr_options(seed = seed) gives each task its own reproducible random-number stream, so the imputed values are the same whether your computer has 2 cores or 16.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html#smoke-tests",
+    "href": "reproducibility.html#smoke-tests",
+    "title": "Appendix B — Reproducibility",
+    "section": "B.3 Smoke tests",
+    "text": "B.3 Smoke tests\nA full render takes time because of the imputation. Before a full run, a smoke test checks that every chapter works:\nquarto render book --profile smoke\nThe smoke profile (_quarto-smoke.yml and _environment-smoke) sets the number of imputations to 2 and writes the book to book/_book-smoke/ and the data to data/processed-smoke/. Every page of a smoke book says “SMOKE TEST” in its title. The number of imputations is set in one place (N_IMPUTATIONS, read in _common.R), and every count in the code and text follows it.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html#reusing-expensive-calculations",
+    "href": "reproducibility.html#reusing-expensive-calculations",
+    "title": "Appendix B — Reproducibility",
+    "section": "B.4 Reusing expensive calculations",
+    "text": "B.4 Reusing expensive calculations\nExpensive R chunks use #| cache: true, Quarto’s standard knitr cache. The setup records the chapter’s R code, contents of its input files, shared settings, R/package versions and survey options in cache.extra. These inputs invalidate cached results when the analysis changes. Editing prose does not.\nFull runs store their caches in data/processed/cache/; smoke runs use data/processed-smoke/cache/. Setup and file-saving chunks always run, so later chapters still receive their inputs on a cached render. Only rendering uses the cache; running individual lines in the R console executes them normally.\nTo recalculate all cached chunks:\nquarto render book --cache-refresh\nOr refresh only the descriptive chapter:\nquarto render book/03-descriptives.qmd --cache-refresh\nSee the Quarto caching documentation for details. Validate the initial calculation before relying on cached results.",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  },
+  {
+    "objectID": "reproducibility.html#session-information",
+    "href": "reproducibility.html#session-information",
+    "title": "Appendix B — Reproducibility",
+    "section": "B.5 Session information",
+    "text": "B.5 Session information\nThe R version, operating system, and package versions used for this render:\n\n\nCode\nutils::sessionInfo()\n\n\nR version 4.6.1 (2026-06-24)\nPlatform: aarch64-apple-darwin23\nRunning under: macOS Golden Gate 27.0.1\n\nMatrix products: default\nBLAS:   /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRblas.0.dylib \nLAPACK: /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1\n\nlocale:\n[1] C.UTF-8/C.UTF-8/C.UTF-8/C/C.UTF-8/C.UTF-8\n\ntime zone: America/Detroit\ntzcode source: internal\n\nattached base packages:\n[1] stats     graphics  grDevices datasets  utils     methods   base     \n\nloaded via a namespace (and not attached):\n [1] digest_0.6.39     fastmap_1.2.0     mitools_2.4       Matrix_1.7-5     \n [5] xfun_0.60         lattice_0.22-9    splines_4.6.1     knitr_1.51       \n [9] htmltools_0.5.9   rmarkdown_2.31    cli_3.6.6         survey_4.5       \n[13] DBI_1.3.0         grid_4.6.1        renv_1.2.2        compiler_4.6.1   \n[17] tools_4.6.1       evaluate_1.0.5    Rcpp_1.1.1-1.1    survival_3.8-6   \n[21] yaml_2.3.12       rlang_1.3.0       jsonlite_2.0.0    htmlwidgets_1.6.4",
+    "crumbs": [
+      "Appendices",
+      "<span class='chapter-number'>B</span>  <span class='chapter-title'>Reproducibility</span>"
+    ]
+  }
+]
