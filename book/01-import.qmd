@@ -77,7 +77,7 @@ same page has the codebook, which lists every variable, its question, and its co
 
 ## Read only the columns we need
 
-The file has 345 columns. We need 13, so we read only those with `col_select`. This keeps
+The file has 345 columns. We need 14, so we read only those with `col_select`. This keeps
 memory use low and makes reading fast. It does not change the survey design: every one of
 the 457,670 respondents is kept, with their weight, stratum, and PSU.
 
@@ -87,9 +87,10 @@ the 457,670 respondents is kept, with their weight, stratum, and PSU.
 | Outcomes | `DIABETE4`, `GENHLTH`, `MEDCOST1` | Ever told you had diabetes; general health; could not afford a doctor |
 | Exposure | `INCOME3` | Annual household income |
 | Covariates | `_AGE_G`, `SEXVAR`, `_IMPRACE` | Age in six groups; sex; race and ethnicity |
+| Continuous-variable example | `_AGE80` | CDC-imputed age in years, capped at 80 |
 | Auxiliary variables | `EDUCA`, `EMPLOY1` | Education; employment (used only to help impute income in @sec-imputation) |
 
-: The 13 variables used in this book {#tbl-variables}
+: The 14 variables used in this book {#tbl-variables}
 
 Names that start with an underscore are variables CDC calculated. In R they must be wrapped
 in backticks, as in `` `_LLCPWT` ``.
@@ -111,18 +112,20 @@ brfss <- haven::read_xpt(
     `_AGE_G`,
     SEXVAR,
     `_IMPRACE`, # covariates
+    `_AGE80`, # continuous-variable descriptive example
     EDUCA,
     EMPLOY1 # auxiliary variables for imputation
   )
 )
 
-# Check: all 457,670 respondents and the 13 columns we asked for.
-stopifnot(nrow(brfss) == 457670, ncol(brfss) == 13)
+# Check: all 457,670 respondents and the 14 columns we asked for.
+stopifnot(nrow(brfss) == 457670, ncol(brfss) == 14)
 dplyr::glimpse(brfss)
 ```
 
-Every column is a number: the answers are codes, such as 1 for "Yes" and 7 for "Don't know".
-@sec-cleaning turns them into labeled categories.
+Every column is numeric, but most answers are category codes, such as 1 for "Yes"
+and 7 for "Don't know". @sec-cleaning turns those codes into labeled categories
+and keeps `_AGE80` as numeric age for the continuous-variable example.
 
 ## Save for the next chapter
 

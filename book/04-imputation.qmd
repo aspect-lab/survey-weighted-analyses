@@ -46,8 +46,8 @@ assumption more plausible.
 ```{r}
 #| label: imp-data
 # diabetes_yes and fair_poor are recomputed from the imputed diabetes and general health in
-# later chapters, so they are not imputed themselves.
-imp_data <- brfss_clean |> tidylog::select(-diabetes_yes, -fair_poor)
+# later chapters. Numeric age is used only in the descriptive example; models use age_group.
+imp_data <- brfss_clean |> tidylog::select(-diabetes_yes, -fair_poor, -age)
 colSums(is.na(imp_data))
 ```
 
@@ -138,7 +138,14 @@ appropriate. Always report the method used for each variable.
 Each completed dataset is independent of the others, so they can be imputed at the same time
 on different processor cores. `furrr::future_map()` runs one imputation per task, and
 `mice::ibind()` combines the single imputations into one object. `future::plan()` sets the
-number of parallel workers (at most four, to keep memory use moderate).
+number of parallel workers. First detect the available cores; reserve one core
+and use at most four workers, or fewer if there are fewer imputations. The cap
+limits memory use because each worker holds its own data.
+
+The main example uses `r n_imputations_book` imputations to keep a classroom run
+short. For a substantive analysis, assess the fraction of missing information
+and the stability of pooled estimates and standard errors, and increase the
+number of imputations when needed.
 
 The `seed` argument makes the results reproducible. `furrr` gives each task its own
 random-number stream derived from the seed, so the imputations are **identical on every
@@ -148,10 +155,10 @@ but its results depend on the number of cores.)
 ```{r}
 #| label: impute
 #| cache: true
-future::plan(
-  future::multisession,
-  workers = min(4, future::availableCores(omit = 1))
-)
+n_cores <- future::availableCores()
+n_workers <- min(n_imputations, 4L, max(1L, n_cores - 1L))
+tibble::tibble(available_cores = n_cores, workers = n_workers)
+future::plan(future::multisession, workers = n_workers)
 start <- Sys.time()
 imputed <- furrr::future_map(
   seq_len(n_imputations),

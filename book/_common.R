@@ -5,9 +5,9 @@
 seed <- 2024
 set.seed(seed)
 
-# Number of imputations. The book uses 20. A smoke test (`quarto render --profile smoke`)
+# Number of imputations. The book uses 5. A smoke test (`quarto render --profile smoke`)
 # sets N_IMPUTATIONS=2 through the file `_environment-smoke`.
-n_imputations_book <- 20L
+n_imputations_book <- 5L
 n_imputations <- as.integer(Sys.getenv(
   "N_IMPUTATIONS",
   unset = n_imputations_book

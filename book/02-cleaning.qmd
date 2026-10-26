@@ -39,6 +39,7 @@ item_values <- list(
   INCOME3 = c(1:11, 77, 99), # 1 Less than $10,000 ... 11 $200,000 or more;
   # 77 Don't know; 99 Refused
   `_AGE_G` = 1:6, # 1 18-24; 2 25-34; 3 35-44; 4 45-54; 5 55-64; 6 65+
+  `_AGE80` = 18:80, # CDC-imputed age in years; 80 means 80 or older
   SEXVAR = 1:2, # 1 Male; 2 Female
   `_IMPRACE` = 1:6, # 1 White; 2 Black; 3 Asian; 4 American Indian or Alaska
   # Native (all non-Hispanic); 5 Hispanic; 6 Other, non-Hispanic
@@ -53,6 +54,7 @@ never_blank <- c(
   "_PSU",
   "_STATE",
   "_AGE_G",
+  "_AGE80",
   "SEXVAR",
   "_IMPRACE"
 )
@@ -181,6 +183,7 @@ brfss_clean <- brfss |>
       factor(
         levels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65 or older")
       ),
+    age = as.numeric(`_AGE80`),
     sex = dplyr::recode_values(
       SEXVAR,
       1 ~ "Male",
@@ -309,6 +312,7 @@ recoded <- c(
   MEDCOST1 = "cost_barrier",
   INCOME3 = "income",
   `_AGE_G` = "age_group",
+  `_AGE80` = "age",
   SEXVAR = "sex",
   `_IMPRACE` = "race_eth",
   EDUCA = "education",
@@ -350,6 +354,7 @@ brfss_clean <- brfss_clean |>
     cost_barrier, # outcomes
     income, # exposure
     age_group,
+    age, # numeric age for the descriptive example; models use age_group
     sex,
     race_eth, # covariates
     education,

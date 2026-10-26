@@ -185,6 +185,99 @@ drops incomplete answers ("complete-case analysis"). The rest of this chapter as
 that matters.
 :::
 
+## Testing a continuous variable {#sec-continuous-test}
+
+**Does mean age differ across the four income groups?** `age` is the numeric
+BRFSS variable `_AGE80`: CDC-imputed age in years, with everyone aged 80 or older
+recorded as 80. The comparison therefore concerns this capped age variable,
+not exact age above 80. See the
+[CDC calculated-variable definitions](https://www.cdc.gov/brfss/annual_data/2024/pdf/2024-calculated-variables-version4-508.pdf).
+The regression chapters continue to use `age_group`.
+
+First select respondents with known income **from the full survey design**.
+Report weighted means and 95% confidence intervals before interpreting a test.
+
+```{r}
+#| label: income-domain
+income_design <- design |> dplyr::filter(!is.na(income))
+```
+
+```{r}
+#| label: mean-age
+#| cache: true
+mean_age <- income_design |>
+  dplyr::group_by(income) |>
+  dplyr::summarise(
+    age = srvyr::survey_mean(age, na.rm = TRUE, vartype = "ci")
+  )
+mean_age
+```
+
+For more than two groups, fit a survey-weighted linear model and test the
+income coefficients together. With four groups there are three coefficients;
+the null hypothesis is that all three are zero, so all four population means
+are equal. The joint Wald F test uses the survey design for its variance.
+
+```{r}
+#| label: age-test
+#| cache: true
+age_fit <- survey::svyglm(age ~ income, design = income_design)
+age_test <- survey::regTermTest(age_fit, ~income, method = "Wald")
+rm(age_fit) # Cache the test result rather than the full model.
+age_test
+```
+
+The p-value is `r format.pval(age_test$p, digits = 2, eps = 0.001)`.
+A small p-value is evidence that at least one mean differs; it does not identify
+which pairs differ or establish that a difference is practically important.
+Use the means and confidence intervals to describe the size of the differences.
+
+### Put the mean test in a summary table
+
+`gtsummary::add_p()` accepts a short custom function returning a p-value. This
+function applies the same model and joint test to a numeric variable and a
+categorical grouping variable.
+
+```{r}
+#| label: mean-test-helper
+mean_test <- function(data, variable, by, ...) {
+  fit <- survey::svyglm(stats::reformulate(by, variable), design = data)
+  test <- survey::regTermTest(fit, stats::reformulate(by), method = "Wald")
+  tibble::tibble(
+    p.value = as.numeric(test$p),
+    method = "Survey-weighted joint Wald test of means"
+  )
+}
+```
+
+```{r}
+#| label: age-summary
+#| cache: true
+age_table <- income_design |>
+  gtsummary::tbl_svysummary(
+    by = income,
+    include = age,
+    label = age ~ "Age (years, capped at 80)",
+    type = age ~ "continuous",
+    statistic = age ~ "{mean} ({sd})"
+  ) |>
+  gtsummary::add_p(test = age ~ mean_test)
+age_table |>
+  gtsummary::modify_caption("**Mean age (SD) by household income**")
+```
+
+The parentheses contain the weighted **standard deviation**, which describes
+variation in age, rather than the standard error of the mean. In a table with
+both variable types, use `all_continuous() ~ mean_test` and
+`all_categorical() ~ "svy.chisq.test"` in the `test` list.
+
+For **two groups**, `survey::svyttest()` is a direct test of the difference in
+means; the corresponding `gtsummary` alias is `"svy.t.test"`. The alias
+`"svy.wald.test"` instead calls a contingency-table test of independence and
+should not be used to test continuous means. See the
+[gtsummary test definitions](https://www.danieldsjoberg.com/gtsummary/reference/tests.html).
+Ordinary `t.test()` and `aov()` do not account for this survey design.
+
 ## Prevalence with confidence intervals
 
 `srvyr::survey_mean()` estimates a weighted mean, here the share of adults with diabetes and

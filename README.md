@@ -68,7 +68,7 @@ appendices, shared navigation and search. Use `quarto preview book` to serve the
 locally with automatic updates as you edit.
 
 **Quick test first.** A smoke test runs the whole book with 2 imputations
-instead of 20 and writes to separate folders (`book/_book-smoke/`, `data/processed-smoke/`), so it
+instead of 5 and writes to separate folders (`book/_book-smoke/`, `data/processed-smoke/`), so it
 never replaces the real results:
 
 ```sh
@@ -87,7 +87,8 @@ quarto render book/03-descriptives.qmd
 
 You do not need to run multiple imputation or modeling to build Tables 1 and 2.
 Chapter 3 explains the integer stratum–PSU identifiers, explicit categorical types,
-survey tests, missing values and caching. Rerender just that chapter while editing
+categorical tests, a joint Wald test of mean age across income groups, missing
+values and caching. Rerender just that chapter while editing
 your descriptive analysis.
 
 Expensive chunks use Quarto's built-in R cache. Later renders reuse unchanged

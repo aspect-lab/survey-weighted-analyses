@@ -23,11 +23,12 @@ change them on purpose rather than by accident.
 | Diabetes told only during pregnancy (`DIABETE4 = 2`) is "No" | Gestational diabetes alone is not current diabetes; the answer settles the value | `r Count("DIABETE4", 2)` |
 | Prediabetes counts as "no diabetes" in the 0/1 outcome | The outcome is diagnosed diabetes | `r Count("DIABETE4", 4)` |
 | Age from `_AGE_G` (six groups, CDC-imputed) rather than `_AGE65YR` (two groups) | Better adjustment for age, a strong confounder; no missing values | All |
+| Numeric age from `_AGE80`, retained as years with 80 meaning 80 or older | Demonstrates a survey-weighted comparison of means; models and imputation retain age groups | All |
 | Race and ethnicity from `_IMPRACE` (CDC-imputed) | CDC fills missing answers for weighting; no missing values | All |
 | Income in four groups: under $25,000; $25,000-$49,999; $50,000-$99,999; $100,000 or more | Enough respondents per group; matches the descriptive tutorials | All with an income answer |
 | Reference groups: lowest income, ages 18-24, female, non-Hispanic White | Lowest income: PRs describe the gradient from the bottom; non-Hispanic White: largest group | All |
 | Prevalence ratios (modified Poisson) rather than odds ratios | Diabetes is common, so odds ratios would overstate the ratios of prevalences | All models |
-| `r n_imputations_book` imputations | At least the percentage of respondents with missing income (about 19%) | All models |
+| `r n_imputations_book` imputations | Keeps the classroom example short; assess stability and use more when needed for a substantive analysis | All models |
 | Imputation by predictive mean matching for every variable, 5 iterations; the weight as a predictor, state omitted | A compact teaching example; assess variable-specific methods, convergence and the effect of including state when adapting it (@sec-imputation) | All imputed values |
 
 ## Crosswalk

@@ -79,7 +79,7 @@ instead of `r n_imputations_book` and writes to separate folders (`book/_book-sm
 
 | Chapter | What it does | Saves |
 |---|---|---|
-| @sec-import | Downloads BRFSS 2024; reads the 13 variables we need | `01-brfss.rds` |
+| @sec-import | Downloads BRFSS 2024; reads the 14 variables we need | `01-brfss.rds` |
 | @sec-cleaning | Declares and checks codebook values; recodes | `02-brfss-clean.rds`, `02-crosswalk.rds` |
 | @sec-descriptives | Survey design; Tables 1 and 2; prevalence; design effects; missing data | |
 | @sec-imputation | Multiple imputation (`r n_imputations` imputations) | `04-imputed.rds` |
