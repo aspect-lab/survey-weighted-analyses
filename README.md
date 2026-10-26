@@ -1,5 +1,7 @@
 # Survey-Weighted Analysis of BRFSS 2024
 
+[Read the book online](https://aspect-lab.github.io/survey-weighted-analyses/).
+
 A Quarto book, titled **survey-weighted-analyses**, that walks through a complete analysis of complex survey data in R, using the
 2024 Behavioral Risk Factor Surveillance System (BRFSS):
 
@@ -98,22 +100,6 @@ quarto render book --cache-refresh
 
 The first render still performs the analysis. Caching speeds up subsequent
 renders; it does not apply to running individual lines in the R console.
-
-## Publish the book to GitHub Pages
-
-The manual workflow in [`.github/workflows/publish.yml`](.github/workflows/publish.yml)
-restores the locked R packages, downloads public BRFSS data, renders the complete
-book and deploys `book/_book/`. It runs only when you start it, and publishes the full
-analysis rather than the smoke test. It reuses package and analysis caches.
-
-After committing and pushing the source changes:
-
-1. In the repository's **Settings → Pages**, choose **GitHub Actions** as the source.
-2. Open **Actions → Publish Quarto book → Run workflow** on the default branch.
-3. The deployment provides the published book URL.
-
-See [GitHub's Pages workflow instructions](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
-for the hosting setup. The local render can be verified before enabling publishing.
 
 ## Layout
 
