@@ -1,0 +1,49 @@
+project:
+  type: book
+  output-dir: _book
+  execute-dir: project
+
+book:
+  title: "survey-weighted-analyses"
+  subtitle: "Import, cleaning, description, imputation, and modeling of complex survey data in R"
+  author: "David Pletta"
+  date: today
+  search: true
+  repo-url: https://github.com/aspect-lab/survey-weighted-analyses
+  repo-subdir: book
+  repo-actions: [source]
+  chapters:
+    - index.qmd
+    - part: "Preparing the data"
+      chapters:
+        - 01-import.qmd
+        - 02-cleaning.qmd
+    - part: "Describing the population"
+      chapters:
+        - 03-descriptives.qmd
+    - part: "Missing data"
+      chapters:
+        - 04-imputation.qmd
+    - part: "Modeling"
+      chapters:
+        - 05-bivariate.qmd
+        - 06-multivariable.qmd
+  appendices:
+    - decisions.qmd
+    - reproducibility.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: show
+    code-copy: true
+    code-overflow: wrap
+
+execute:
+  echo: true
+  message: true
+  warning: true
+  freeze: false

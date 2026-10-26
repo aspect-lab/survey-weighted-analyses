@@ -1,0 +1,55 @@
+# Data: each user downloads the CDC file; nothing derived from it is committed.
+data/raw/
+data/processed/
+data/processed-smoke/
+
+# Rendered book and Quarto/knitr working files
+_book/
+_book-smoke/
+.quarto/
+*_files/
+*_cache/
+*.rmarkdown
+**/*.quarto_ipynb
+
+# R and editors
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+*.code-workspace
+.vscode/
+.idea/
+
+# Local troubleshooting, agent state, and internal planning notes
+troubleshooting/
+.superpowers/
+.claude/
+.agents/
+.codex/
+.cursor/
+docs/superpowers/
+
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+.Renviron
+.Renviron.*
+.envrc
+.aws/
+.ssh/
+.secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local dependency environments and language caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/

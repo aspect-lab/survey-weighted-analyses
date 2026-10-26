@@ -1,0 +1,84 @@
+# Reproducibility {#sec-reproducibility}
+
+```{r}
+#| label: setup
+#| include: false
+source("_common.R")
+```
+
+Anyone who runs this book should get the same numbers. Three things make that possible.
+
+## The same packages: renv
+
+R packages change between versions, and a new version can change a result. The
+[renv](https://rstudio.github.io/renv/) package records the exact version of every package
+the book uses in `renv.lock` and installs those versions into a library inside the project
+(`renv/library/`), separate from your other R projects.
+
+| Task | Command (R console, in the project) |
+|---|---|
+| Install the recorded versions (once, after downloading the project) | `renv::restore()` |
+| Check that the installed packages match the lockfile | `renv::status()` |
+| After adding a package to `DESCRIPTION` and installing it | `renv::snapshot()` |
+
+`renv` starts automatically when R opens in the project folder (through the `.Rprofile`
+file). The packages the book needs are listed in `DESCRIPTION`; `renv` records them and their
+dependencies.
+
+## The same random numbers: seeds
+
+Multiple imputation draws random values. `_common.R` sets the same seed (`r seed`) at the
+start of every chapter. The imputation runs one task per imputation in parallel, and
+`furrr::furrr_options(seed = seed)` gives each task its own reproducible random-number stream,
+so the imputed values are the same whether your computer has 2 cores or 16.
+
+## Smoke tests
+
+A full render takes time because of the imputation. Before a full run, a smoke test checks
+that every chapter works:
+
+```sh
+quarto render book --profile smoke
+```
+
+The `smoke` profile (`_quarto-smoke.yml` and `_environment-smoke`) sets the number of
+imputations to 2 and writes the book to `book/_book-smoke/` and the data to
+`data/processed-smoke/`. Every page of a smoke book says "SMOKE TEST" in its title. The
+number of imputations is set in one place (`N_IMPUTATIONS`, read in `_common.R`), and every
+count in the code and text follows it.
+
+## Reusing expensive calculations
+
+Expensive R chunks use `#| cache: true`, Quarto's standard knitr cache. The
+setup records the chapter's R code, contents of its input files, shared settings,
+R/package versions and survey options in `cache.extra`. These inputs invalidate
+cached results when the analysis changes. Editing prose does not.
+
+Full runs store their caches in `data/processed/cache/`; smoke runs use
+`data/processed-smoke/cache/`. Setup and file-saving chunks always run, so later
+chapters still receive their inputs on a cached render. Only rendering uses the
+cache; running individual lines in the R console executes them normally.
+
+To recalculate all cached chunks:
+
+```sh
+quarto render book --cache-refresh
+```
+
+Or refresh only the descriptive chapter:
+
+```sh
+quarto render book/03-descriptives.qmd --cache-refresh
+```
+
+See the [Quarto caching documentation](https://quarto.org/docs/computations/caching.html)
+for details. Validate the initial calculation before relying on cached results.
+
+## Session information
+
+The R version, operating system, and package versions used for this render:
+
+```{r}
+#| label: session-info
+utils::sessionInfo()
+```
