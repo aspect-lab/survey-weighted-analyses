@@ -110,7 +110,6 @@ renders; it does not apply to running individual lines in the R console.
 | `book/decisions.qmd`, `book/reproducibility.qmd` | Appendices: coding decisions with counts; packages, seeds, session information |
 | `book/_common.R` | Settings every chapter uses: seed, number of imputations, folders |
 | `book/_quarto.yml`, `book/_quarto-smoke.yml`, `book/_environment-smoke` | Book configuration and the smoke-test profile |
-| `.github/workflows/publish.yml` | Manually triggered full-book build and GitHub Pages deployment |
 | `DESCRIPTION`, `renv.lock`, `renv/` | Package list and the recorded package versions |
 | `data/` | Your local copy of the data and the files the chapters save (see `data/README.md`) |
 
